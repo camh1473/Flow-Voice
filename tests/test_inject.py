@@ -58,3 +58,16 @@ def test_restore_happens_after_paste_delay():
     f = Fake()
     run(f, "hi")
     assert f.events == ["send", "sleep"]
+
+def test_copy_selection_returns_selected_text_and_restores_clipboard():
+    from flowvoice.inject import copy_selection
+    state = {"clip": "orig"}
+
+    def send(keys):
+        assert keys == "ctrl+c"
+        state["clip"] = "selected words"
+
+    got = copy_selection(get_clip=lambda: state["clip"],
+                         set_clip=lambda v: state.__setitem__("clip", v),
+                         send=send, sleep=lambda s: None)
+    assert got == "selected words" and state["clip"] == "orig"

@@ -9,9 +9,10 @@ class Dictation:
     """Serial background pipeline: audio -> transcribe -> clean -> paste."""
 
     def __init__(self, transcribe: Callable[[np.ndarray], str], clean: Callable[[str], str],
-                 paste: Callable[[str], None], on_error: Callable[[str], None]):
+                 paste: Callable[[str], None], on_error: Callable[[str], None],
+                 on_done: Callable[[], None] = lambda: None):
         self._transcribe, self._clean = transcribe, clean
-        self._paste, self._on_error = paste, on_error
+        self._paste, self._on_error, self._on_done = paste, on_error, on_done
         self._q: queue.Queue = queue.Queue()
         threading.Thread(target=self._run, daemon=True).start()
 
@@ -36,3 +37,5 @@ class Dictation:
                     self._paste(text)
             except Exception as e:
                 self._on_error(f"Dictation failed: {e}")
+            finally:
+                self._on_done()

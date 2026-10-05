@@ -15,7 +15,7 @@ Double-click `run.bat`. A grey dot appears in the system tray; wait for the "Rea
 ## Settings
 Right-click the tray icon -> **Settings...** to change hotkeys, model, microphone, start-with-Windows, and the backtrack/filler phrase lists. Phrase lists apply immediately; other changes restart the app automatically.
 
-Under the hood it is`%APPDATA%\FlowVoice\config.json` (created on first save) - `ptt_key`, `tts_key`, `model` (`tiny.en`, `base.en`, `small.en`, `medium.en`), `mic_device`, `start_with_windows`. Restart the app after editing.
+The config file is `%APPDATA%\FlowVoice\config.json` (created on first save) - `ptt_key`, `tts_key`, `model` (`tiny.en`, `base.en`, `small.en`, `medium.en`), `mic_device`, `start_with_windows`. Restart the app after editing.
 
 ## Known limits
 - Apps running as Administrator ignore pasted input from a normal-privilege process.

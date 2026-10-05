@@ -84,7 +84,7 @@ def test_tts_trigger_speaks_selection():
 def test_state_returns_to_idle_after_paste():
     app, pasted, tray, _ = make()
     app.on_ptt_start(); app.on_ptt_stop(); app.dictation.join()
-    assert tray.states == ["recording", "processing", "idle"]
+    assert tray.states[:2] == ["recording", "processing"] and tray.states[-1] == "idle"
 
 
 def test_engine_error_notifies_tray():
@@ -99,3 +99,18 @@ def test_tts_trigger_while_speaking_stops():
     spk.speaking = True
     app.on_tts_trigger()
     assert spk.said == ["<stop>"]
+
+def test_ptt_cancel_discards_recording_and_returns_to_idle():
+    app, pasted, tray, _ = make()
+    app.on_ptt_start(); app.on_ptt_cancel(); app.dictation.join()
+    assert pasted == [] and tray.states[-1] == "idle"
+
+
+def test_indicator_hidden_before_paste():
+    seen = []
+    tray = FakeTray()
+    app = App(Config(), engine=FakeEngine(), recorder=FakeRecorder(AUDIO), speaker=FakeSpeaker(),
+              tray=tray, paste=lambda t: seen.append(tray.states[-1]),
+              copy_selection=lambda: "")
+    app.on_ptt_start(); app.on_ptt_stop(); app.dictation.join()
+    assert seen == ["idle"]

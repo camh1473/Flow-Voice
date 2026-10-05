@@ -56,3 +56,15 @@ def test_cuda_failure_falls_back_to_cpu(monkeypatch):
     e = eng.Engine("tiny.en", model_factory=_FakeModel)
     assert e.transcribe(np.zeros(100, dtype=np.float32)) == "ok"
     assert e.device == "cpu"
+
+def test_construction_failure_on_cuda_falls_back_to_cpu(monkeypatch):
+    import flowvoice.engine as eng
+    monkeypatch.setattr(eng, "_pick_device", lambda: ("cuda", "float16"))
+
+    def factory(name, device, compute_type):
+        if device == "cuda":
+            raise RuntimeError("cudnn missing")
+        return _FakeModel(name, device, compute_type)
+
+    e = eng.Engine("tiny.en", model_factory=factory)
+    assert e.device == "cpu" and e.transcribe(np.zeros(10, dtype=np.float32)) == "ok"

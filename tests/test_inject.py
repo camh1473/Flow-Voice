@@ -71,3 +71,20 @@ def test_copy_selection_returns_selected_text_and_restores_clipboard():
                          set_clip=lambda v: state.__setitem__("clip", v),
                          send=send, sleep=lambda s: None)
     assert got == "selected words" and state["clip"] == "orig"
+
+def test_get_clip_failure_still_pastes():
+    f = Fake()
+    def bad_get():
+        raise RuntimeError("clipboard locked")
+    paste_text("hello", get_clip=bad_get, set_clip=f.set, send=f.send,
+               type_text=f.type, sleep=f.sleep)
+    assert f.sent == ["ctrl+v"] and f.clip_at_send == "hello"
+
+
+def test_copy_selection_waits_for_modifiers_released():
+    from flowvoice.inject import copy_selection
+    order = []
+    copy_selection(get_clip=lambda: "x", set_clip=lambda v: None,
+                   send=lambda k: order.append("send"), sleep=lambda s: None,
+                   wait_released=lambda: order.append("wait"))
+    assert order == ["wait", "send"]

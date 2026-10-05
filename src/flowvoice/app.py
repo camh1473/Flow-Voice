@@ -13,8 +13,9 @@ class App:
         self.speaker = speaker
         self.tray = tray
         self._copy_selection = copy_selection
+        self._paste = paste
         self._recording = False
-        self.dictation = Dictation(engine.transcribe, clean, paste,
+        self.dictation = Dictation(engine.transcribe, clean, self._paste_text,
                                    on_error=tray.notify, on_done=self._on_done)
 
     def on_ptt_start(self) -> None:
@@ -30,6 +31,15 @@ class App:
             return
         self.tray.set_state("processing")
         self.dictation.submit(audio)
+
+    def on_ptt_cancel(self) -> None:
+        self._recording = False
+        self.recorder.stop()
+        self.tray.set_state("idle")
+
+    def _paste_text(self, text: str) -> None:
+        self.tray.set_state("idle")  # hide the badge so it can never take focus from the paste
+        self._paste(text)
 
     def on_tts_trigger(self) -> None:
         if self.speaker.is_speaking():

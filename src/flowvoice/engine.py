@@ -24,7 +24,12 @@ class Engine:
         self._name = model_name
         self._factory = model_factory
         self.device = device
-        self._model = self._factory(self._name, device=device, compute_type=compute)
+        try:
+            self._model = self._factory(self._name, device=device, compute_type=compute)
+        except Exception:
+            if device != "cuda":
+                raise
+            self._fall_back_to_cpu()
 
     def _fall_back_to_cpu(self) -> None:
         self.device = "cpu"

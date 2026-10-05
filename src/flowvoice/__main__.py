@@ -1,3 +1,5 @@
+import threading
+
 from flowvoice.app import App
 from flowvoice.autostart import set_autostart
 from flowvoice.config import load_config
@@ -33,8 +35,12 @@ def main() -> None:
             return
         recorders.append(recorder)
         app = App(cfg, engine=engine, recorder=recorder, speaker=Speaker(), tray=tray)
-        hotkeys.extend([PushToTalk(cfg.ptt_key, app.on_ptt_start, app.on_ptt_stop),
-                        Toggle(cfg.tts_key, app.on_tts_trigger)])
+        def read_aloud() -> None:
+            threading.Thread(target=app.on_tts_trigger, daemon=True).start()
+
+        hotkeys.extend([PushToTalk(cfg.ptt_key, app.on_ptt_start, app.on_ptt_stop,
+                                   on_cancel=app.on_ptt_cancel),
+                        Toggle(cfg.tts_key, read_aloud)])
         for h in hotkeys:
             h.enable()
         tray.notify(f"Ready - hold {cfg.ptt_key} to dictate")

@@ -12,9 +12,13 @@ class FakeBackend:
         self.cb = callback
         return "handle"
 
+    def hook(self, callback):
+        return "any-handle"
+
     def unhook(self, handle):
-        self.unhooked = True
-        self.cb = None
+        if handle == "handle":
+            self.unhooked = True
+            self.cb = None
 
     def send(self, kind):
         if self.cb:
@@ -66,7 +70,7 @@ def test_toggle_fires_once_per_press():
     assert log == ["fire", "fire"]
 
 class ComboBackend(FakeBackend):
-    def add_hotkey(self, key, callback):
+    def add_hotkey(self, key, callback, **kw):
         self.combo = (key, callback)
         return "combo-handle"
 
@@ -84,3 +88,62 @@ def test_toggle_combo_uses_add_hotkey():
     assert key == "ctrl+alt+s" and log == ["fire"]
     t.disable()
     assert b.combo is None
+
+# --- review fixes ---
+class AnyBackend(FakeBackend):
+    def __init__(self):
+        super().__init__()
+        self.any_cb = None
+
+    def hook(self, callback):
+        self.any_cb = callback
+        return "any-handle"
+
+    def send_named(self, kind, name):
+        ev = SimpleNamespace(event_type=kind, name=name)
+        if self.cb and name in ("right ctrl", "left ctrl"):
+            self.cb(ev)
+        if self.any_cb:
+            self.any_cb(ev)
+
+
+def make_named():
+    log = []
+    b = AnyBackend()
+    h = PushToTalk("right ctrl", lambda: log.append("start"), lambda: log.append("stop"),
+                   on_cancel=lambda: log.append("cancel"), backend=b)
+    h.enable()
+    return b, log
+
+
+def test_left_ctrl_does_not_trigger_push_to_talk():
+    b, log = make_named()
+    b.send_named("down", "left ctrl"); b.send_named("up", "left ctrl")
+    assert log == []
+
+
+def test_other_key_while_held_cancels_recording():
+    b, log = make_named()
+    b.send_named("down", "right ctrl")
+    b.send_named("down", "c")
+    b.send_named("up", "right ctrl")
+    assert log == ["start", "cancel"]
+
+
+def test_other_modifier_while_held_does_not_cancel():
+    b, log = make_named()
+    b.send_named("down", "right ctrl")
+    b.send_named("down", "left ctrl")  # e.g. our own injected Ctrl+V
+    b.send_named("up", "left ctrl")
+    b.send_named("up", "right ctrl")
+    assert log == ["start", "stop"]
+
+
+def test_toggle_combo_triggers_on_release():
+    class B(ComboBackend):
+        def add_hotkey(self, key, callback, **kw):
+            self.kw = kw
+            return super().add_hotkey(key, callback)
+    b = B()
+    Toggle("ctrl+alt+s", lambda: None, backend=b).enable()
+    assert b.kw.get("trigger_on_release") is True

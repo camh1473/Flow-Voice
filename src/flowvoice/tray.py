@@ -1,3 +1,4 @@
+import ctypes
 import queue
 import threading
 import tkinter as tk
@@ -14,6 +15,15 @@ def _icon(color: str) -> Image.Image:
     img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
     ImageDraw.Draw(img).ellipse((8, 8, 56, 56), fill=color)
     return img
+
+
+def _no_activate(root: tk.Tk) -> None:
+    """Make the badge a non-activating tool window so showing it never steals focus."""
+    root.update_idletasks()
+    user32 = ctypes.windll.user32
+    hwnd = user32.GetParent(root.winfo_id()) or root.winfo_id()
+    style = user32.GetWindowLongW(hwnd, -20)
+    user32.SetWindowLongW(hwnd, -20, style | 0x08000000 | 0x00000080)  # NOACTIVATE | TOOLWINDOW
 
 
 class _Indicator:
@@ -36,6 +46,7 @@ class _Indicator:
         root.geometry(f"{w}x{h}+{x}+{y}")
         label = tk.Label(root, text="", fg="white", font=("Segoe UI", 9, "bold"))
         label.pack(fill="both", expand=True)
+        _no_activate(root)
         root.withdraw()
 
         def poll():

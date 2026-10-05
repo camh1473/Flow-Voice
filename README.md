@@ -9,9 +9,13 @@ Double-click `run.bat`. A grey dot appears in the system tray; wait for the "Rea
 - **Dictate:** hold **Right Ctrl**, speak, release. Text is pasted where your cursor is.
 - **Read aloud:** select text and press **Ctrl+Alt+S**. Press again to stop.
 - A red REC badge shows while recording.
+- **Backtrack:** say "scratch that", "never mind", "forget that", "delete that", "cancel that", "strike that", "ignore that" or "excuse me" and your last sentence is deleted along with the phrase.
+- Filler words (um, uh) and set-off phrases like "you know," "I mean," "basically," "well," are dropped.
 
 ## Settings
-`%APPDATA%\FlowVoice\config.json` (created on first save) - `ptt_key`, `tts_key`, `model` (`tiny.en`, `base.en`, `small.en`, `medium.en`), `mic_device`, `start_with_windows`. Restart the app after editing.
+Right-click the tray icon -> **Settings...** to change hotkeys, model, microphone, start-with-Windows, and the backtrack/filler phrase lists. Phrase lists apply immediately; other changes restart the app automatically.
+
+Under the hood it is`%APPDATA%\FlowVoice\config.json` (created on first save) - `ptt_key`, `tts_key`, `model` (`tiny.en`, `base.en`, `small.en`, `medium.en`), `mic_device`, `start_with_windows`. Restart the app after editing.
 
 ## Known limits
 - Apps running as Administrator ignore pasted input from a normal-privilege process.

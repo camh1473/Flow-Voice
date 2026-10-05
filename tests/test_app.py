@@ -114,3 +114,15 @@ def test_indicator_hidden_before_paste():
               copy_selection=lambda: "")
     app.on_ptt_start(); app.on_ptt_stop(); app.dictation.join()
     assert seen == ["idle"]
+
+
+def test_app_uses_live_phrase_lists_from_config():
+    pasted = []
+    cfg = Config(backtrack_phrases=["oops"])
+    app = App(cfg, engine=FakeEngine(text="Keep this. Drop me. Oops."), recorder=FakeRecorder(AUDIO),
+              speaker=FakeSpeaker(), tray=FakeTray(), paste=pasted.append, copy_selection=lambda: "")
+    app.on_ptt_start(); app.on_ptt_stop(); app.dictation.join()
+    assert pasted == ["Keep this."]
+    app.config = Config(backtrack_phrases=[])  # settings changed at runtime
+    app.on_ptt_start(); app.on_ptt_stop(); app.dictation.join()
+    assert pasted[-1] == "Keep this. Drop me. Oops."

@@ -1,7 +1,9 @@
 import json
 import os
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
+
+from flowvoice.cleanup import DEFAULT_BACKTRACK_PHRASES, DEFAULT_FILLER_PHRASES
 
 
 @dataclass
@@ -11,6 +13,8 @@ class Config:
     model: str = "small.en"
     mic_device: int | None = None
     start_with_windows: bool = False
+    filler_phrases: list[str] = field(default_factory=lambda: list(DEFAULT_FILLER_PHRASES))
+    backtrack_phrases: list[str] = field(default_factory=lambda: list(DEFAULT_BACKTRACK_PHRASES))
 
 
 def default_path() -> Path:

@@ -15,7 +15,7 @@ class App:
         self._copy_selection = copy_selection
         self._paste = paste
         self._recording = False
-        self.dictation = Dictation(engine.transcribe, clean, self._paste_text,
+        self.dictation = Dictation(engine.transcribe, self._clean, self._paste_text,
                                    on_error=tray.notify, on_done=self._on_done)
 
     def on_ptt_start(self) -> None:
@@ -31,6 +31,10 @@ class App:
             return
         self.tray.set_state("processing")
         self.dictation.submit(audio)
+
+    def _clean(self, text: str) -> str:
+        return clean(text, fillers=self.config.filler_phrases,
+                     backtracks=self.config.backtrack_phrases)
 
     def on_ptt_cancel(self) -> None:
         self._recording = False

@@ -1,3 +1,6 @@
+import os
+import subprocess
+import sys
 import threading
 
 from flowvoice.app import App
@@ -6,6 +9,7 @@ from flowvoice.config import load_config
 from flowvoice.engine import Engine
 from flowvoice.hotkey import PushToTalk, Toggle
 from flowvoice.recorder import Recorder
+from flowvoice.settings import needs_restart
 from flowvoice.tray import Tray
 from flowvoice.tts import Speaker
 
@@ -15,6 +19,7 @@ def main() -> None:
     set_autostart(cfg.start_with_windows)
     hotkeys: list = []
     recorders: list = []
+    apps: list = []
 
     def quit_app() -> None:
         for h in hotkeys:
@@ -22,7 +27,28 @@ def main() -> None:
         for r in recorders:
             r.close()
 
-    tray = Tray(on_quit=quit_app)
+    def restart() -> None:
+        quit_app()
+        subprocess.Popen([sys.executable, "-m", "flowvoice"])
+        os._exit(0)
+
+    def open_settings() -> None:
+        def work() -> None:
+            subprocess.run([sys.executable, "-m", "flowvoice.settings"])
+            new = load_config()
+            current = apps[0].config if apps else cfg
+            if new == current:
+                return
+            if needs_restart(current, new):
+                tray.notify("Applying settings...")
+                restart()
+            elif apps:
+                apps[0].config = new
+                tray.notify("Settings saved")
+
+        threading.Thread(target=work, daemon=True).start()
+
+    tray = Tray(on_quit=quit_app, on_settings=open_settings)
 
     def setup() -> None:
         tray.notify("Loading speech model...")
@@ -35,6 +61,8 @@ def main() -> None:
             return
         recorders.append(recorder)
         app = App(cfg, engine=engine, recorder=recorder, speaker=Speaker(), tray=tray)
+        apps.append(app)
+
         def read_aloud() -> None:
             threading.Thread(target=app.on_tts_trigger, daemon=True).start()
 

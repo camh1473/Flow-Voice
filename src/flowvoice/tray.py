@@ -67,11 +67,12 @@ class _Indicator:
 
 
 class Tray:
-    def __init__(self, on_quit):
+    def __init__(self, on_quit, on_settings=lambda: None):
         self._on_quit = on_quit
         self._indicator = _Indicator()
         self._icon = pystray.Icon("flowvoice", _icon(_COLORS["idle"]), "Flow Voice",
-                                  menu=pystray.Menu(pystray.MenuItem("Quit", self._quit)))
+                                  menu=pystray.Menu(pystray.MenuItem("Settings...", lambda icon, item: on_settings()),
+                                                    pystray.MenuItem("Quit", self._quit)))
 
     def run(self, on_ready=None) -> None:
         """Blocks on the tray loop; `on_ready` runs on a worker thread once the icon is up."""

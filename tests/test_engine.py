@@ -34,3 +34,25 @@ def test_low_noise_returns_empty(engine):
     rng = np.random.default_rng(0)
     noise = (rng.standard_normal(32000) * 0.005).astype(np.float32)
     assert engine.transcribe(noise) == ""
+
+
+class _FakeSegment:
+    text = " ok "
+
+
+class _FakeModel:
+    def __init__(self, name, device, compute_type):
+        self.device = device
+
+    def transcribe(self, audio, **kw):
+        if self.device == "cuda":
+            raise RuntimeError("Library cublas64_12.dll is not found or cannot be loaded")
+        return [_FakeSegment()], None
+
+
+def test_cuda_failure_falls_back_to_cpu(monkeypatch):
+    import flowvoice.engine as eng
+    monkeypatch.setattr(eng, "_pick_device", lambda: ("cuda", "float16"))
+    e = eng.Engine("tiny.en", model_factory=_FakeModel)
+    assert e.transcribe(np.zeros(100, dtype=np.float32)) == "ok"
+    assert e.device == "cpu"

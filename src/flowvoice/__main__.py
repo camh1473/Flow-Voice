@@ -1,4 +1,5 @@
 from flowvoice.app import App
+from flowvoice.autostart import set_autostart
 from flowvoice.config import load_config
 from flowvoice.engine import Engine
 from flowvoice.hotkey import PushToTalk, Toggle
@@ -9,6 +10,7 @@ from flowvoice.tts import Speaker
 
 def main() -> None:
     cfg = load_config()
+    set_autostart(cfg.start_with_windows)
     hotkeys: list = []
     recorders: list = []
 

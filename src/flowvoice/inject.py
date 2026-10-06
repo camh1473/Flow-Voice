@@ -21,7 +21,7 @@ def _safe_get(get_clip):
 
 def paste_text(text: str, *, get_clip=pyperclip.paste, set_clip=pyperclip.copy,
                send=keyboard.send, type_text=keyboard.write, sleep=time.sleep) -> None:
-    if not text.strip():
+    if not text.strip(" \t"):
         return
     original = _safe_get(get_clip)
     try:

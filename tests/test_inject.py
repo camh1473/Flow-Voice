@@ -48,6 +48,19 @@ def test_empty_text_noop():
     assert f.sent == [] and f.events == [] and f.clip == "orig"
 
 
+def test_tab_space_only_text_noop():
+    f = Fake()
+    run(f, " \t ")
+    run(f, "")
+    assert f.sent == [] and f.events == [] and f.clip == "orig"
+
+
+def test_break_only_text_is_pasted():
+    f = Fake()
+    run(f, "\n\n")
+    assert f.sent == ["ctrl+v"] and f.clip_at_send == "\n\n" and f.clip == "orig"
+
+
 def test_restores_clipboard_when_send_raises():
     f = Fake(fail_send=True)
     run(f, "hello")

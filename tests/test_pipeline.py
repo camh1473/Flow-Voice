@@ -24,6 +24,20 @@ def test_empty_transcript_pastes_nothing():
     assert out == []
 
 
+def test_break_only_text_is_pasted():
+    out, err = [], []
+    d = make(lambda a: "x", out, err, clean=lambda t: "\n\n")
+    d.submit(np.ones(10, dtype=np.float32)); d.join()
+    assert out == ["\n\n"]
+
+
+def test_space_only_text_not_pasted():
+    out, err = [], []
+    d = make(lambda a: "x", out, err, clean=lambda t: " \t ")
+    d.submit(np.ones(10, dtype=np.float32)); d.join()
+    assert out == []
+
+
 def test_none_audio_ignored():
     out, err = [], []
     called = []

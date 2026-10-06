@@ -39,6 +39,22 @@ def test_apply_commands(text, expected):
     assert apply_commands(text) == expected
 
 
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("new paragraph hello", "\n\nhello"),
+        ("new line hello", "\nhello"),
+        ("new line", "\n"),
+        ("new paragraph", "\n\n"),
+        ("New paragraph.", "\n\n"),
+        ("bullet point apples", "- apples"),
+    ],
+)
+def test_leading_breaks(text, expected):
+    # new line / new paragraph keep a leading break; a bullet at the start drops its own
+    assert apply_commands(text) == expected
+
+
 def test_longest_phrase_wins():
     mapping = {"exclamation": "EXC", "exclamation point": "!"}
     assert apply_commands("hi exclamation point", mapping) == "hi!"

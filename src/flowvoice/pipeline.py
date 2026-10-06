@@ -46,7 +46,7 @@ class Dictation:
             try:
                 raw = self._transcribe(audio)
                 text = self._clean(raw)
-                if text.strip():
+                if text.strip(" \t"):  # a break-only take ("new paragraph") still pastes
                     self._paste(text)
                     self._notify_result(raw, text, tag)
             except Exception as e:

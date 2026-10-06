@@ -133,7 +133,7 @@ def _join(items: list[tuple[str, str]]) -> str:
         no_before, no_after = _ROLE_SPACING[role]
         if role == "break":
             out = out.rstrip(" ")
-            if not out:
+            if not out and text.strip("\n"):  # a bullet at the start drops its own break
                 text = text.lstrip("\n")
         elif out and not glue_next and not no_before:
             out += " "

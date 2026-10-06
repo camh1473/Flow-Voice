@@ -98,8 +98,17 @@ def test_sentence_capitalization_after_punctuation(raw, expected):
 
 def test_edge_line_breaks_from_commands_kept():
     assert clean("hello new line", commands=DEFAULT_COMMANDS) == "Hello\n"
-    # apply_commands itself drops a leading break (commands.py, out of scope here)
-    assert clean("new paragraph hello", commands=DEFAULT_COMMANDS) == "Hello"
+    assert clean("new paragraph hello", commands=DEFAULT_COMMANDS) == "\n\nHello"
     assert clean("\n\nhello") == "\n\nHello"
     assert clean("  ", commands=DEFAULT_COMMANDS) == ""
     assert clean(" \t ") == ""
+
+
+def test_break_only_take_keeps_its_break():
+    assert clean("new paragraph", commands=DEFAULT_COMMANDS) == "\n\n"
+    assert clean("New line.", commands=DEFAULT_COMMANDS) == "\n"
+
+
+def test_leading_break_after_dropped_filler_is_consistent():
+    assert clean("Um, new line, uh, test.", commands=DEFAULT_COMMANDS) == "\nTest."
+    assert clean("new line, test.", commands=DEFAULT_COMMANDS) == "\nTest."

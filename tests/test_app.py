@@ -252,6 +252,12 @@ def test_commands_applied():
     assert pasted == ["Hello,\nWorld"]
 
 
+def test_break_only_take_pastes_the_break():
+    app, pasted, ui, _ = make(engine=FakeEngine(text="New paragraph."))
+    app.on_ptt_start(); app.on_ptt_stop(); app.dictation.join()
+    assert pasted == ["\n\n"] and ui.entries[-1].clean_text == "\n\n"
+
+
 def test_voice_commands_off_leaves_words():
     app, pasted, _, _ = make(engine=FakeEngine(text="hello comma new line world"),
                              config=Config(voice_commands=False))

@@ -194,6 +194,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:
         self._settings.setValue("geometry", self.saveGeometry())
+        self._settings.sync()  # restart os._exit()s, skipping Qt's lazy flush
         if self._quitting:
             event.accept()
             return

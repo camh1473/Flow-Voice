@@ -134,6 +134,15 @@ def test_geometry_saved_to_given_settings(qapp, tmp_path):
     assert (again.width(), again.height()) == (700, 500)
 
 
+def test_close_flushes_geometry_to_disk(qapp, tmp_path):
+    path = tmp_path / "flush.ini"
+    settings = QSettings(str(path), QSettings.IniFormat)
+    win = MainWindow(Config(), None, lambda c: None, settings=settings)
+    win.show()
+    win.close()  # hides; a restart then os._exit()s without Qt's lazy flush
+    assert path.exists() and "geometry" in path.read_text(encoding="latin-1")
+
+
 def test_mics_stored(qapp, tmp_path):
     settings = QSettings(str(tmp_path / "m.ini"), QSettings.IniFormat)
     mics = [("Default", None), ("USB Mic", 3)]

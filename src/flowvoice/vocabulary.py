@@ -12,14 +12,18 @@ def _unique_terms(terms: list[str]) -> list[str]:
     return out
 
 
-def glossary_prompt(terms: list[str], limit: int = 400) -> str | None:
-    """Whisper initial prompt "Glossary: A, B, C." capped at `limit` characters."""
+def _prompt_terms(terms: list[str], limit: int = 400) -> list[str]:
     chosen: list[str] = []
     for term in _unique_terms(terms):
-        candidate = "Glossary: " + ", ".join(chosen + [term]) + "."
-        if len(candidate) > limit:
+        if len("Glossary: " + ", ".join(chosen + [term]) + ".") > limit:
             break
         chosen.append(term)
+    return chosen
+
+
+def glossary_prompt(terms: list[str], limit: int = 400) -> str | None:
+    """Whisper initial prompt "Glossary: A, B, C." capped at `limit` characters."""
+    chosen = _prompt_terms(terms, limit)
     return "Glossary: " + ", ".join(chosen) + "." if chosen else None
 
 
@@ -48,7 +52,16 @@ def _words(text: str) -> list[str]:
 
 
 def is_glossary_echo(text: str, terms: list[str]) -> bool:
-    """True when a transcript is only the glossary prompt echoed back (silence)."""
-    allowed = {w for term in terms for w in _words(term)}
-    words = [w for w in _words(text) if w != "glossary"]
-    return bool(words) and all(w in allowed for w in words)
+    """True when a transcript is the glossary prompt echoed back (Whisper on silence).
+
+    Only the whole prompt, or the first 2+ terms in list order, count; a single term
+    said alone is real dictation.
+    """
+    words = _words(text)
+    chosen = _prompt_terms(terms)
+    if not words or not chosen:
+        return False
+    parts = [_words(t) for t in chosen]
+    if words == ["glossary"] + [w for p in parts for w in p]:
+        return True
+    return any(words == [w for p in parts[:k] for w in p] for k in range(2, len(parts) + 1))

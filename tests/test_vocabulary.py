@@ -73,15 +73,40 @@ def test_idempotent():
     assert apply_dictionary(once, ["TBB"], {"perry home": "Perry Homes"}) == once
 
 
-def test_echo_detected():
-    terms = ["TBB", "Perry Homes"]
-    assert is_glossary_echo("Glossary: TBB, Perry Homes.", terms)
-    assert is_glossary_echo("TBB, Perry Homes", terms)
-    assert is_glossary_echo("tbb", terms)
+def test_echo_full_prompt_and_prefix():
+    terms = ["Perry Homes", "TBB", "Seiren"]
+    assert is_glossary_echo("Glossary: Perry Homes, TBB, Seiren.", terms)
+    assert is_glossary_echo("Perry Homes, TBB, Seiren", terms)
+    assert is_glossary_echo("Perry Homes, TBB", terms)
+    assert is_glossary_echo("Glossary: Perry Homes, TBB.", ["Perry Homes", "TBB"])
+    assert is_glossary_echo("Glossary: TBB.", ["TBB"])
 
 
-def test_not_echo():
-    terms = ["TBB", "Perry Homes"]
-    assert not is_glossary_echo("TBB is great", terms)
-    assert not is_glossary_echo("", terms)
-    assert not is_glossary_echo("Glossary:", terms)
+def test_not_echo_short_dictation():
+    assert not is_glossary_echo("perry", ["Perry Homes"])
+    assert not is_glossary_echo("the", ["The Big Build"])
+    assert not is_glossary_echo("voice", ["Flow Voice"])
+    assert not is_glossary_echo("c", ["C++"])
+    assert not is_glossary_echo("Perry Homes", ["Perry Homes"])
+    assert not is_glossary_echo("tbb", ["TBB", "Perry Homes"])
+    assert not is_glossary_echo("TBB perry homes", ["Perry Homes", "TBB"])
+    assert not is_glossary_echo("Perry Homes, TBB, hello", ["Perry Homes", "TBB", "Seiren"])
+    assert not is_glossary_echo("TBB is great", ["TBB", "Perry Homes"])
+    assert not is_glossary_echo("", ["TBB", "Perry Homes"])
+    assert not is_glossary_echo("Glossary:", ["TBB", "Perry Homes"])
+
+
+def test_longer_term_outranks_overlapping_fix():
+    out = apply_dictionary("perry homes llc", ["Perry Homes LLC"], {"perry homes": "Perry Homes"})
+    assert out == "Perry Homes LLC"
+
+
+def test_term_inside_fix_does_not_alter_write_as():
+    assert apply_dictionary("see perry home", ["perry"], {"perry home": "PERRY Homes"}) == "see PERRY Homes"
+
+
+def test_prompt_exact_400_boundary():
+    first = "x" * 200
+    kept = glossary_prompt([first, "y" * 187])
+    assert len(kept) == 400 and kept.endswith("y.")
+    assert glossary_prompt([first, "y" * 188]) == f"Glossary: {first}."

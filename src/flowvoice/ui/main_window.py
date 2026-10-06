@@ -1,0 +1,217 @@
+"""Main window: sidebar (Home / History / Settings) over a stack of pages."""
+from typing import Callable
+
+from PySide6.QtCore import QRect, QSettings, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QFontDatabase, QGuiApplication, QIcon, QPainter, QPixmap
+from PySide6.QtWidgets import (
+    QApplication,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QListWidget,
+    QListWidgetItem,
+    QMainWindow,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
+
+from flowvoice.config import Config
+from flowvoice.history import History
+from flowvoice.ui import theme
+from flowvoice.ui.home_view import HomeView
+
+PAGES = ("Home", "History", "Settings")
+GLYPHS = {"Home": "\ue80f", "History": "\ue81c", "Settings": "\ue713"}
+ICON_FONTS = ("Segoe Fluent Icons", "Segoe MDL2 Assets")
+DEFAULT_SIZE = (880, 620)
+MIN_SIZE = (640, 460)
+SIDEBAR_WIDTH = 200
+ICON_PX = 18
+
+
+def pretty_key(key: str) -> str:
+    """'right ctrl' -> 'Right Ctrl', 'ctrl+alt+s' -> 'Ctrl+Alt+S'."""
+    return "+".join(part.strip().title() for part in key.split("+"))
+
+
+def hint_text(config: Config) -> str:
+    key = pretty_key(config.ptt_key)
+    if config.hands_free:
+        return f"Hold {key} to talk, or double-tap it to go hands-free."
+    return f"Hold {key} to talk."
+
+
+def placeholder(title: str) -> QWidget:
+    """A page with a centered label; Tasks 13-14 replace these."""
+    page = QWidget()
+    page.setObjectName("Page")
+    layout = QVBoxLayout(page)
+    label = QLabel(f"{title} is coming soon.")
+    label.setObjectName("Placeholder")
+    label.setAlignment(Qt.AlignCenter)
+    layout.addWidget(label)
+    return page
+
+
+def _icon_font() -> str | None:
+    families = set(QFontDatabase.families())
+    return next((f for f in ICON_FONTS if f in families), None)
+
+
+def _glyph_pixmap(family: str, glyph: str, color: str, px: int, ratio: float) -> QPixmap:
+    pix = QPixmap(round(px * ratio), round(px * ratio))
+    pix.setDevicePixelRatio(ratio)
+    pix.fill(Qt.transparent)
+    painter = QPainter(pix)
+    painter.setRenderHint(QPainter.TextAntialiasing)
+    font = QFont(family)
+    font.setPixelSize(round(px * 0.9))
+    painter.setFont(font)
+    painter.setPen(QColor(color))
+    painter.drawText(QRect(0, 0, px, px), Qt.AlignCenter, glyph)
+    painter.end()
+    return pix
+
+
+class MainWindow(QMainWindow):
+    """Closing hides the window; only request_quit() lets it really close.
+
+    Page seam for later tasks: `set_history_view(widget)` and `set_settings_view(widget)`
+    swap the placeholder page in the stack and update the matching attribute.
+    """
+
+    quit_requested = Signal()
+
+    def __init__(
+        self,
+        config: Config,
+        history: History | None,
+        on_save_config: Callable[[Config], None],
+        settings: QSettings | None = None,
+        mics: list[tuple[str, int | None]] | None = None,
+        dark: bool | None = None,
+    ) -> None:
+        super().__init__()
+        self.config = config
+        self.history = history
+        self.on_save_config = on_save_config
+        self.mics = mics
+        self._settings = settings if settings is not None else QSettings("FlowVoice", "FlowVoice")
+        self._quitting = False
+        self._follow_system = dark is None
+        app = QApplication.instance()
+        self._dark = theme.is_dark(app) if dark is None else dark
+        self._scale = config.ui_scale
+        self.setWindowTitle("Flow Voice")
+
+        content = QWidget()
+        content.setObjectName("Content")
+        row = QHBoxLayout(content)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(0)
+
+        self.sidebar_frame = QFrame()
+        self.sidebar_frame.setObjectName("Sidebar")
+        side = QVBoxLayout(self.sidebar_frame)
+        side.setContentsMargins(12, 22, 12, 16)
+        side.setSpacing(0)
+        title = QLabel("Flow Voice")
+        title.setObjectName("SidebarTitle")
+        side.addWidget(title)
+        self.sidebar = QListWidget()
+        self.sidebar.setObjectName("SidebarList")
+        self.sidebar.setFocusPolicy(Qt.NoFocus)
+        self.sidebar.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.sidebar.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        for name in PAGES:
+            QListWidgetItem(name, self.sidebar)
+        side.addWidget(self.sidebar, 1)
+        row.addWidget(self.sidebar_frame)
+
+        self.pages = QStackedWidget()
+        self.home = HomeView()
+        self.home.hint(hint_text(config))
+        self.history_view: QWidget = placeholder("History")
+        self.settings_view: QWidget = placeholder("Settings")
+        for page in (self.home, self.history_view, self.settings_view):
+            self.pages.addWidget(page)
+        row.addWidget(self.pages, 1)
+        self.setCentralWidget(content)
+
+        self.sidebar.currentRowChanged.connect(self.pages.setCurrentIndex)
+        self.sidebar.setCurrentRow(0)
+        hints = QGuiApplication.styleHints()
+        if self._follow_system and hasattr(hints, "colorSchemeChanged"):
+            hints.colorSchemeChanged.connect(self._on_scheme_changed)
+
+        self.apply_scale(self._scale)
+        self._restore_geometry()
+
+    def apply_scale(self, scale: float) -> None:
+        self._scale = scale
+        self.setStyleSheet(theme.stylesheet(self._dark, scale))
+        self.setMinimumSize(round(MIN_SIZE[0] * scale), round(MIN_SIZE[1] * scale))
+        self.sidebar_frame.setFixedWidth(round(SIDEBAR_WIDTH * scale))
+        self.sidebar.setIconSize(QSize(round(ICON_PX * scale), round(ICON_PX * scale)))
+        self._refresh_icons()
+
+    def set_dark(self, dark: bool) -> None:
+        self._dark = dark
+        self.apply_scale(self._scale)
+
+    def is_dark(self) -> bool:
+        return self._dark
+
+    def set_history_view(self, widget: QWidget) -> None:
+        self._replace_page(self.history_view, widget)
+        self.history_view = widget
+
+    def set_settings_view(self, widget: QWidget) -> None:
+        self._replace_page(self.settings_view, widget)
+        self.settings_view = widget
+
+    def show_page(self, name: str) -> None:
+        self.sidebar.setCurrentRow(PAGES.index(name))
+
+    def request_quit(self) -> None:
+        self._quitting = True
+        self.quit_requested.emit()
+
+    def closeEvent(self, event) -> None:
+        self._settings.setValue("geometry", self.saveGeometry())
+        if self._quitting:
+            event.accept()
+            return
+        event.ignore()
+        self.hide()
+
+    def _replace_page(self, old: QWidget, new: QWidget) -> None:
+        index = self.pages.indexOf(old)
+        current = self.pages.currentIndex() == index
+        self.pages.removeWidget(old)
+        self.pages.insertWidget(index, new)
+        if current:
+            self.pages.setCurrentIndex(index)
+        old.deleteLater()
+
+    def _restore_geometry(self) -> None:
+        saved = self._settings.value("geometry")
+        if saved is None or not self.restoreGeometry(saved):
+            self.resize(*DEFAULT_SIZE)
+
+    def _on_scheme_changed(self, *_) -> None:
+        self.set_dark(theme.is_dark(QApplication.instance()))
+
+    def _refresh_icons(self) -> None:
+        family = _icon_font()
+        if family is None:
+            return
+        colors = theme.tokens(self._dark)
+        px = round(ICON_PX * self._scale)
+        ratio = self.devicePixelRatioF() or 1.0
+        for i, name in enumerate(PAGES):
+            icon = QIcon()
+            icon.addPixmap(_glyph_pixmap(family, GLYPHS[name], colors["accent"], px, ratio), QIcon.Normal)
+            icon.addPixmap(_glyph_pixmap(family, GLYPHS[name], "#ffffff", px, ratio), QIcon.Selected)
+            self.sidebar.item(i).setIcon(icon)

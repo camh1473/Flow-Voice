@@ -7,7 +7,7 @@ Double-click `run.bat`. The first launch downloads the ~500 MB `small.en` speech
 
 ## Dictate
 - **Hold to talk:** hold **Right Ctrl**, speak, release. The text is pasted where your cursor is.
-- **Hands-free:** double-tap **Right Ctrl** (two quick taps) to latch recording on, or click the pill. Talk as long as you like, up to 5 minutes. Recording ends when you press Right Ctrl again, click the pill again, or stop talking for the set number of seconds (default 4; it only counts after you have started speaking).
+- **Hands-free:** double-tap **Right Ctrl** (two quick taps) to latch recording on, or click the pill. Talk as long as you like, up to 5 minutes. Recording ends when you press Right Ctrl again, click the pill again, or stop talking for the set number of seconds (default 4; it only counts after you have started speaking). A hands-free take in which you never spoke is discarded, not transcribed.
 - **Esc** cancels the take; nothing is pasted. Pressing any other key while holding Right Ctrl also cancels.
 - A single quick tap of Right Ctrl does nothing.
 
@@ -42,10 +42,12 @@ Say these words and they become punctuation or formatting. Turn the whole featur
 
 How the guard works, in plain words:
 - If the word before is `the, a, an, this, that, time, grace, trial, probation, my, your, his, her, our, their, to`, the guarded word stays a word ("the time period", "a trial period", "a dash of salt").
-- "Period" converts only when you set it off (punctuation just before it), when it is the last word, or when it is directly followed by another command.
+- "Period" converts only when you set it off (punctuation just before it), when it is the last word, or when it is directly followed by another command. To end a sentence, say **"full stop"**, which always converts: Whisper usually writes a final "period" as "period." with its own dot, and that stays a word.
 - "Dot" converts only before a common ending (`com, org, net, edu, gov, io, co, us, ai, dev, app, uk`) or inside an address after "at sign".
 - Inside an address, "dash", "hyphen", "slash" and "underscore" always convert, and "dash" gives a plain hyphen.
 - Bare "quote" is not a command; use "open quote" and "close quote".
+
+**Line breaks on their own:** "new line" or "new paragraph" at the start of a take starts the text on a new line, and a take that is only "new paragraph" or "new line" pastes just that break.
 
 **Escape:** say **literal** right before a command to type the word itself ("literal comma" types the word comma).
 
@@ -76,7 +78,8 @@ Select text in any app and press **Ctrl+Alt+S**. Press it again to stop.
 ## Known limits
 - Apps running as Administrator ignore pasted input from a normal-privilege process.
 - The clipboard is restored after each paste, but only for text (images on the clipboard are lost).
-- The command guard is a heuristic, and Whisper's own punctuation decides some cases. "Period" needs to be set off to convert mid-sentence.
+- The command guard is a heuristic, and Whisper's own punctuation decides some cases. "Period" converts only when set off; say "full stop" to end a sentence, because Whisper usually writes a last-word "period" as "period." and it stays a word.
+- Starting dictation from the **Start dictation** button on Home or in the tray menu makes Flow Voice itself the foreground window, so the text appears only in the Last transcription card and in History. To paste into another app, use the hotkey or click the pill.
 - Starting a second copy of Flow Voice is not prevented; run only one.
 
 ## Develop

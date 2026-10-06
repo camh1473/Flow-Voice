@@ -34,25 +34,51 @@ _SENTENCE_START = re.compile(r"(?:^|[.!?:]\s+|\n\s*)$")
 _LAST_ITEM_END = re.compile(r"[.!?](?=\s+\S)|\n")
 _EDGE_WORD = re.compile(r"^(?:and|then)(?!\w)|(?<!\w)(?:and|then)$", re.IGNORECASE)
 
-_OBJECT_CUES = ("the following", "a list of", "list of")
-_NOUN_CUES = (
-    "shopping list", "to-do list", "to do list", "todo list",
+_CUES = (
+    "the following", "a list of", "list of", "shopping list", "to-do list", "to do list", "todo list",
     "things to do", "things i need", "agenda", "ingredients", "items",
 )
 _BULLET_CUE = re.compile(
-    r"(?<![\w-])(?P<cue>" + "|".join(c.replace(" ", r"\s+") for c in _OBJECT_CUES + _NOUN_CUES)
+    r"(?<![\w-])(?P<cue>" + "|".join(c.replace(" ", r"\s+") for c in _CUES)
     + r")(?![\w-])[ \t]*(?P<p>[:,])?[ \t]*",
     re.IGNORECASE,
 )
 _NOT_AN_ITEM = re.compile(
     r"(?:is|are|was|were|be|been|will|would|can|could|should|must|may|might|has|have|had|do|does|did"
     r"|i|you|he|she|it|we|they|me|him|us|them|this|that|these|those|there|which|who|what"
-    r"|to|for|from|with|in|on|at|of|by|about|into|after|before|like"
+    r"|to|for|from|with|in|on|at|of|by|about|into|after|before|like|as"
     r"|day|days|week|weeks|month|months|year|years|morning|afternoon|evening|night|weekend|time)(?!\w)",
     re.IGNORECASE,
 )
 _BULLET_SEP = re.compile(r"\s*,(?=\s|$)\s*(?:(?:and|then)\s+)?|\s+(?:and|then)\s+", re.IGNORECASE)
+_CUE_BEGINS_SENTENCE = re.compile(
+    r"(?:^|[.!?]\s+|\n\s*)(?:(?:okay|so),?\s+)?(?:(?:my|our|the|today's)\s+)?$", re.IGNORECASE
+)
+_FOLLOWING_HEAD = re.compile(
+    r"(?:way|ways|scenario|scenarios|point|points|instruction|instructions|step|steps|reason|reasons"
+    r"|question|questions|example|examples|rule|rules|case|cases|issue|issues|option|options|idea|ideas"
+    r"|problem|problems|topic|topics|thing|things|item|items|people|person|statement|message|details"
+    r"|information|terms|changes|comments|link|document|plan|words)(?!\w)",
+    re.IGNORECASE,
+)
+_CONJUNCTION = re.compile(r"(?:but|or|so|yet|nor)(?!\w)", re.IGNORECASE)
+_ADVERB = re.compile(r"\w+ly(?!\w)", re.IGNORECASE)
+_LY_NOUNS = {
+    "family", "july", "italy", "ally", "belly", "jelly", "bully", "rally", "supply", "reply", "apply",
+    "assembly", "anomaly", "monopoly", "butterfly", "lily", "holly", "molly", "sally", "emily", "kelly",
+}
+_PLACEHOLDER = re.compile("[" + chr(0xE100) + "-" + chr(0xE1FF) + "]")
 _MAX_BULLET_WORDS = 6
+
+
+def _has_content(item: str) -> bool:
+    """A word character or a snippet placeholder makes an item non-empty."""
+    return bool(re.search(r"\w", item) or _PLACEHOLDER.search(item))
+
+
+def _starts_with_adverb(item: str) -> bool:
+    m = _ADVERB.match(item)
+    return bool(m) and m.group().lower() not in _LY_NOUNS
 
 
 def _value(token: str) -> int:
@@ -162,7 +188,7 @@ def _format_numbered(text: str) -> str | None:
         return None
     lead, raw_items, tail = _split(text, run)
     items = [_clean_item(item) for item in raw_items]
-    if not all(re.search(r"\w", item) for item in items):
+    if not all(_has_content(item) for item in items):
         return None
     lines = [f"{i}. {item}" for i, item in enumerate(items, 1)]
     return _render(_lead_in(lead), lines, tail)
@@ -172,19 +198,24 @@ def _bullet_items(text: str, cue: re.Match) -> tuple[list[str], str] | None:
     """Items and tail after `cue`, or None when the cue does not lead a list."""
     region, tail = _cut_tail(text[cue.end():])
     items = [_clean_item(item) for item in _BULLET_SEP.split(region)]
-    if len(items) < 3:
+    if len(items) < 3 or any(_CONJUNCTION.match(item) for item in items):
         return None
-    if cue.group("p") != ":":
-        if " ".join(cue.group("cue").lower().split()) not in _OBJECT_CUES:
-            return None
-        if _SENTENCE_START.search(text[:cue.start()]) or ":" in region:
-            return None
-        if any(_NOT_AN_ITEM.match(item) for item in items):
-            return None
     for item in items:
         words = [w for w in item.split() if re.search(r"\w", w)]
-        if not words or len(words) > _MAX_BULLET_WORDS:
+        if not _has_content(item) or len(words) > _MAX_BULLET_WORDS:
             return None
+    if cue.group("p") == ":":
+        return items, tail
+    before = text[:cue.start()]
+    if cue.group("p") == ",":
+        leads = bool(_CUE_BEGINS_SENTENCE.search(before))
+    else:
+        following = " ".join(cue.group("cue").lower().split()) == "the following"
+        leads = following and not _SENTENCE_START.search(before) and not _FOLLOWING_HEAD.match(items[0])
+    if not leads or ":" in region:
+        return None
+    if any(_NOT_AN_ITEM.match(item) or _starts_with_adverb(item) for item in items):
+        return None
     return items, tail
 
 

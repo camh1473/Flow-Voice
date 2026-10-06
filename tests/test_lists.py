@@ -88,9 +88,14 @@ def test_placeholders_pass_through_items_untouched():
     assert format_lists(text) == f"Send:\n1. {ph(0)} to Sam\n2. The plans"
 
 
-def test_placeholder_only_item_invalidates_list():
+def test_placeholder_only_item_is_an_item():
     text = f"Send 1. {ph(0)} 2. the plans"
-    assert format_lists(text) == text
+    assert format_lists(text) == f"Send:\n1. {ph(0)}\n2. The plans"
+
+
+def test_placeholder_only_numbered_items():
+    text = f"1. {ph(0)} 2. {ph(1)}"
+    assert format_lists(text) == f"1. {ph(0)}\n2. {ph(1)}"
 
 
 def test_placeholder_is_never_a_marker():
@@ -126,11 +131,27 @@ BULLETS = "\n- Apples\n- Bananas\n- Oranges"
 @pytest.mark.parametrize("text, expected", [
     ("Shopping list: apples, bananas, and oranges.", "Shopping list:" + BULLETS),
     ("Please add the following milk, eggs, and bread", "Please add the following:\n- Milk\n- Eggs\n- Bread"),
-    ("Please add the following, milk, eggs, and bread.", "Please add the following:\n- Milk\n- Eggs\n- Bread"),
     ("Buy the following: apples, bananas, oranges", "Buy the following:" + BULLETS),
-    ("I made a list of apples, bananas, and oranges.", "I made a list of:" + BULLETS),
     ("Here is a list of: apples, bananas, oranges", "Here is a list of:" + BULLETS),
-    ("Make a list of apples, bananas, oranges", "Make a list of:" + BULLETS),
+    ("Here is my list of: apples, bananas, oranges", "Here is my list of:" + BULLETS),
+    ("Shopping list, milk, eggs, and bread.", "Shopping list:\n- Milk\n- Eggs\n- Bread"),
+    ("My shopping list, milk, eggs, and bread.", "My shopping list:\n- Milk\n- Eggs\n- Bread"),
+    ("Okay, shopping list, milk, eggs, and bread.", "Okay, shopping list:\n- Milk\n- Eggs\n- Bread"),
+    ("So our agenda, budget, hiring, and sales.", "So our agenda:\n- Budget\n- Hiring\n- Sales"),
+    ("Today's agenda, budget, hiring, and sales.", "Today's agenda:\n- Budget\n- Hiring\n- Sales"),
+    ("Hi Sam. Shopping list, milk, eggs, bread.", "Hi Sam. Shopping list:\n- Milk\n- Eggs\n- Bread"),
+    ("To-do list, call Sam, send the plans, and book the lender.",
+     "To-do list:\n- Call Sam\n- Send the plans\n- Book the lender"),
+    ("Things to do, call Sam, send the plans, and book the lender.",
+     "Things to do:\n- Call Sam\n- Send the plans\n- Book the lender"),
+    ("Things I need, milk, eggs, and bread.", "Things I need:\n- Milk\n- Eggs\n- Bread"),
+    ("Agenda, budget, hiring, and sales.", "Agenda:\n- Budget\n- Hiring\n- Sales"),
+    ("Ingredients, flour, sugar, eggs, and butter.", "Ingredients:\n- Flour\n- Sugar\n- Eggs\n- Butter"),
+    ("Items, pens, cups, and boxes.", "Items:\n- Pens\n- Cups\n- Boxes"),
+    ("A list of, pens, cups, and boxes.", "A list of:\n- Pens\n- Cups\n- Boxes"),
+    ("The following, milk, eggs, and bread.", "The following:\n- Milk\n- Eggs\n- Bread"),
+    ("Shopping list, family pack, jelly, and supply bags.",
+     "Shopping list:\n- Family pack\n- Jelly\n- Supply bags"),
     ("My to-do list: apples, bananas, oranges", "My to-do list:" + BULLETS),
     ("My to do list: apples, bananas, oranges", "My to do list:" + BULLETS),
     ("My todo list: apples, bananas, oranges", "My todo list:" + BULLETS),
@@ -155,8 +176,6 @@ BULLETS = "\n- Apples\n- Bananas\n- Oranges"
     ("Get the following pens, then cups, then boxes. And then rest.",
      "Get the following:\n- Pens\n- Cups\n- Boxes\n\nAnd then rest."),
     ("Please buy the following eggs, milk, bread, etc.", "Please buy the following:\n- Eggs\n- Milk\n- Bread\n- Etc."),
-    ("Dr. Smith gave me a list of pills, creams, and drops.",
-     "Dr. Smith gave me a list of:\n- Pills\n- Creams\n- Drops"),
 ])
 def test_bulleted_lists(text, expected):
     assert format_lists(text) == expected
@@ -211,8 +230,44 @@ def test_bulleted_lists(text, expected):
     "Return the items, then the boxes, then the bags.",
     "Items like pens, cups, and boxes are cheap.",
     "The following items, pens, cups and boxes.",
+    # Review round 2: noun cues with a comma only when they begin the sentence.
+    "The agenda, the minutes, and the budget are ready.",
+    "My shopping list, honestly, was too long, messy, and lost.",
+    "The agenda, as always, ran long, late, and loud.",
+    "Things I need, I buy, fast, and cheap.",
+    "Please check our agenda, budget, hiring, and sales.",
+    "Okay so the agenda, budget, hiring, and sales.",
+    # Review round 2: "a list of" / "list of" no longer take the colon-free form.
+    "I made a list of apples, bananas, and oranges.",
+    "Make a list of apples, bananas, oranges",
+    "Dr. Smith gave me a list of pills, creams, and drops.",
+    "He made a list of names, addresses and phone numbers and sent it.",
+    "I got a list of complaints, mostly small, but some big.",
+    "There is a list of reasons, good, bad, and ugly.",
+    # Review round 2: "the following" mid-sentence takes no comma; head nouns, adverbs, conjunctions cancel.
+    "Please add the following, milk, eggs, and bread.",
+    "I need the following, honestly, truly, and deeply.",
+    "Follow the following instructions carefully, slowly, and calmly.",
+    "I agree with the following points, mostly, and partly.",
+    "I'll do it the following way, quickly, and quietly.",
+    "Consider the following scenario, bad, worse, and worst.",
+    "Please review the following, thanks, Sam, and Ann.",
+    "Use the following, a pen, a pad, and a laptop.",
+    "Get the following milk, eggs, but not bread.",
+    "Shopping list, quickly, milk, and eggs.",
+    "The following, slowly, milk, and eggs.",
+    # Any form: an item starting with a conjunction cancels the list.
+    "Shopping list: one, two, or three apples.",
+    "Shopping list, one, two, or three apples.",
+    "Agenda: budget, hiring, yet sales.",
 ])
 def test_bullets_unchanged(text):
+    assert format_lists(text) == text
+
+
+def test_bullet_without_punctuation_is_a_known_limit():
+    # Known limit: without a comma or colon after the cue there is no reliable split point.
+    text = "My shopping list milk eggs and bread."
     assert format_lists(text) == text
 
 
@@ -221,9 +276,27 @@ def test_bullet_placeholders_pass_through():
     assert format_lists(text) == f"Shopping list:\n- {ph(0)} milk\n- Eggs\n- Bread"
 
 
-def test_bullet_placeholder_only_item_invalidates_list():
-    text = f"Shopping list: {ph(0)}, eggs, bread"
-    assert format_lists(text) == text
+def test_bullet_placeholder_only_item_is_an_item():
+    text = f"Agenda: budget, {ph(0)}, hiring"
+    assert format_lists(text) == f"Agenda:\n- Budget\n- {ph(0)}\n- Hiring"
+
+
+def test_bullet_placeholder_only_items_comma_form():
+    text = f"Shopping list, {ph(0)}, {ph(1)}, and bread."
+    assert format_lists(text) == f"Shopping list:\n- {ph(0)}\n- {ph(1)}\n- Bread"
+
+
+def test_bullet_placeholders_never_count_as_words():
+    text = f"Agenda: a b c d e f {ph(0)} {ph(1)}, budget, hiring"
+    assert format_lists(text) == f"Agenda:\n- A b c d e f {ph(0)} {ph(1)}\n- Budget\n- Hiring"
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("The agenda: budget, hiring, sales", "The agenda:\n- Budget\n- Hiring\n- Sales"),
+    ("Agenda: really big budget, hiring, sales", "Agenda:\n- Really big budget\n- Hiring\n- Sales"),
+])
+def test_colon_form_keeps_working(text, expected):
+    assert format_lists(text) == expected
 
 
 @pytest.mark.parametrize("text", [
@@ -233,7 +306,30 @@ def test_bullet_placeholder_only_item_invalidates_list():
     "things to do: call Sam, send the plans then book the lender",
     "The agenda is long, boring, and late.",
     "Shopping list: 1. milk 2. eggs 3. bread",
+    "Okay, shopping list, milk, eggs, and bread.",
+    "The following, milk, eggs, and bread.",
+    "To-do list, call Sam, send the plans, and book the lender.",
 ])
 def test_bullets_idempotent(text):
     once = format_lists(text)
     assert format_lists(once) == once
+
+
+def _words(text: str) -> list[str]:
+    return sorted(
+        w for w in (t.strip(".,:;!?").lower() for t in text.replace("\n- ", " ").split())
+        if w and w not in ("and", "then", "-")
+    )
+
+
+@pytest.mark.parametrize("text", [
+    "Shopping list, milk, eggs, and bread.",
+    "Okay, shopping list, milk, eggs, and bread.",
+    "To-do list, call Sam, send the plans, and book the lender.",
+    "Things to do: call Sam, send the plans then book the lender",
+    "Please add the following milk, eggs, and bread",
+    "Shopping list: milk, eggs, bread. Then I leave.",
+    "The following, milk, eggs, and bread.",
+])
+def test_bullets_preserve_words(text):
+    assert _words(format_lists(text)) == _words(text)

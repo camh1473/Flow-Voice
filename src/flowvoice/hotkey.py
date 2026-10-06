@@ -8,17 +8,18 @@ _MODIFIERS = {"ctrl", "left ctrl", "right ctrl", "shift", "left shift", "right s
 
 
 class PushToTalk:
-    """Hold `key` to record. Callbacks run inside the keyboard hook: keep them fast.
+    """Raw press/release/other-key events for `key`; TalkMode decides what they mean.
 
-    Only events whose name equals `key` count (keyboard's hook_key also matches the
-    left Ctrl for "right ctrl"). Pressing any non-modifier key while held cancels the
-    take, so Right-Ctrl shortcuts (Right Ctrl+C) don't dictate.
+    Callbacks run inside the keyboard hook: keep them fast. Only events whose name equals
+    `key` count (keyboard's hook_key also matches the left Ctrl for "right ctrl").
+    `_held` tracks the physical key only, so auto-repeat never re-fires `on_press`.
+    `on_other_key(name)` fires on any non-modifier key-down, whether or not `key` is held.
     """
 
-    def __init__(self, key: str, on_start: Callable[[], None], on_stop: Callable[[], None],
-                 on_cancel: Callable[[], None] = lambda: None, backend=keyboard):
-        self._key, self._on_start, self._on_stop = key, on_start, on_stop
-        self._on_cancel = on_cancel
+    def __init__(self, key: str, on_press: Callable[[], None], on_release: Callable[[], None],
+                 on_other_key: Callable[[str], None] = lambda name: None, backend=keyboard):
+        self._key, self._on_press, self._on_release = key, on_press, on_release
+        self._on_other_key = on_other_key
         self._backend = backend
         self._handles: list = []
         self._held = False
@@ -43,17 +44,16 @@ class PushToTalk:
         if event.event_type == "down":
             if not self._held:
                 self._held = True
-                self._on_start()
+                self._on_press()
         elif self._held:
             self._held = False
-            self._on_stop()
+            self._on_release()
 
     def _on_any(self, event) -> None:
         name = getattr(event, "name", None)
-        if self._held and event.event_type == "down" and name is not None \
+        if event.event_type == "down" and name is not None \
                 and name != self._key and name not in _MODIFIERS:
-            self._held = False
-            self._on_cancel()
+            self._on_other_key(name)
 
 
 class Toggle:

@@ -327,6 +327,71 @@ def test_paste_when_not_recording_goes_idle_before_paste():
     assert ui.states[-1] == "idle"
 
 
+def test_injected_paste_keys_do_not_cancel_held_next_take():
+    clock = Clock()
+    engine = GatedEngine()
+    pasted, ui = [], FakeUi()
+    holder = {}
+
+    def paste(text):
+        holder["app"].other_key("v")  # the injected Ctrl+V reaches the global hook
+        pasted.append(text)
+
+    app = App(Config(), engine=engine, recorder=FakeRecorder(AUDIO), speaker=FakeSpeaker(),
+              ui=ui, paste=paste, copy_selection=lambda: "", active_app=lambda: "",
+              clock=clock)
+    holder["app"] = app
+    app.press(); clock.t += 1.0; app.release()  # take A queued
+    assert engine.entered.wait(5)
+    app.press()  # take B held while A pastes
+    engine.gate.set(); app.dictation.join()
+    assert pasted == ["Hello"] and app.talk.state == "held"
+    clock.t += 1.0
+    app.release(); app.dictation.join()
+    assert pasted == ["Hello", "Hello"] and app.talk.state == "idle"
+
+
+def test_injected_copy_keys_do_not_cancel_held_take():
+    clock = Clock()
+    holder = {}
+
+    def copy():
+        holder["app"].other_key("c")
+        return "read me"
+
+    ui, spk = FakeUi(), FakeSpeaker()
+    app = App(Config(), engine=FakeEngine(), recorder=FakeRecorder(AUDIO), speaker=spk, ui=ui,
+              paste=lambda t: None, copy_selection=copy, active_app=lambda: "", clock=clock)
+    holder["app"] = app
+    app.press()
+    app.on_tts_trigger()
+    assert spk.said == ["read me"] and app.talk.state == "held"
+
+
+def test_real_other_key_still_cancels_held_take():
+    clock = Clock()
+    app, pasted, ui, _ = make(clock=clock)
+    app.press()
+    app.other_key("x")
+    assert app.talk.state == "idle" and ui.states[-1] == "idle"
+
+
+def test_injection_flag_cleared_when_paste_raises():
+    clock = Clock()
+    ui = FakeUi()
+
+    def bad_paste(text):
+        raise RuntimeError("no clipboard")
+
+    app = App(Config(), engine=FakeEngine(), recorder=FakeRecorder(AUDIO), speaker=FakeSpeaker(),
+              ui=ui, paste=bad_paste, copy_selection=lambda: "", active_app=lambda: "",
+              clock=clock)
+    app.press(); clock.t += 1.0; app.release(); app.dictation.join()
+    app.press()
+    app.other_key("x")
+    assert app.talk.state == "idle"
+
+
 def test_on_level_never_raises_into_audio_thread():
     app, _, ui, _ = make()
 

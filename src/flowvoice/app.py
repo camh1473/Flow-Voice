@@ -1,4 +1,6 @@
+import threading
 import time
+from contextlib import contextmanager
 from datetime import datetime
 
 from flowvoice.cleanup import clean
@@ -28,6 +30,8 @@ class App:
         self._active_app = active_app
         self._recording = False
         self._tag = ""
+        self._inject_lock = threading.Lock()
+        self._injecting = 0  # read lock-free by the hook thread
         self.dictation = Dictation(engine.transcribe, self._clean, self._paste_text,
                                    on_error=ui.notify, on_done=self._on_done,
                                    on_result=self._on_result)
@@ -43,7 +47,19 @@ class App:
         self.talk.release()
 
     def other_key(self, name: str) -> None:
+        if self._injecting:  # our own Ctrl+V / Ctrl+C must not cancel a held take
+            return
         self.talk.other_key(name)
+
+    @contextmanager
+    def _injection(self):
+        with self._inject_lock:
+            self._injecting += 1
+        try:
+            yield
+        finally:
+            with self._inject_lock:
+                self._injecting -= 1
 
     def click(self) -> None:
         self.talk.click()
@@ -95,7 +111,8 @@ class App:
     def _paste_text(self, text: str) -> None:
         if not self._recording:  # a newer take keeps its recording pill (non-activating)
             self.ui.set_state("idle")  # hide the badge so it can never take focus from the paste
-        self._paste(text)
+        with self._injection():
+            self._paste(text)
 
     def _on_result(self, raw: str, clean_text: str, tag) -> None:
         """Runs on the worker after the paste: history trouble must never propagate."""
@@ -121,7 +138,9 @@ class App:
         if self.speaker.is_speaking():
             self.speaker.stop()
             return
-        self.speaker.speak(self._copy_selection())
+        with self._injection():
+            text = self._copy_selection()
+        self.speaker.speak(text)
 
     def _on_done(self) -> None:
         self.ui.set_state("recording" if self._recording else "idle")

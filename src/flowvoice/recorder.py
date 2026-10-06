@@ -1,4 +1,5 @@
 from collections import deque
+from typing import Callable
 
 import numpy as np
 import sounddevice
@@ -21,6 +22,7 @@ class Recorder:
         self._take: list[np.ndarray] = []
         self._recording = False
         self._recorded = 0
+        self.on_level: Callable[[float], None] | None = None
 
     def open(self) -> None:
         self._stream = self._factory(samplerate=SAMPLE_RATE, channels=1, dtype="float32",
@@ -49,11 +51,21 @@ class Recorder:
             return None
         return np.concatenate(take) if take else None
 
+    def _report_level(self, mono: np.ndarray) -> None:
+        callback = self.on_level
+        if callback is None or not len(mono):
+            return
+        try:
+            callback(min(1.0, float(np.sqrt(np.mean(np.square(mono)))) * 10))
+        except Exception:
+            pass
+
     def _on_audio(self, indata, frames, time, status) -> None:
         mono = np.array(indata[:, 0], dtype=np.float32, copy=True)
         if self._recording:
             self._take.append(mono)
             self._recorded += len(mono)
+            self._report_level(mono)
             return
         self._ring.append(mono)
         self._ring_len += len(mono)

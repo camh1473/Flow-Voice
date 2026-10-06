@@ -50,3 +50,52 @@ def test_audio_before_start_not_kept_beyond_preroll():
 def test_audio_ignored_when_not_recording_and_stop_without_start():
     r = Recorder()
     assert r.stop() is None
+
+
+def level_chunk(value, ms=100):
+    return np.full((SR * ms // 1000, 1), value, dtype=np.float32)
+
+
+def test_level_reported_while_recording():
+    levels = []
+    r = Recorder()
+    r.on_level = levels.append
+    r.start()
+    r._on_audio(level_chunk(0.01), 1600, None, None)
+    assert levels == [pytest.approx(0.1, abs=1e-3)]
+
+
+def test_level_clamped_to_one():
+    levels = []
+    r = Recorder()
+    r.on_level = levels.append
+    r.start()
+    r._on_audio(level_chunk(0.5), 1600, None, None)
+    assert levels == [1.0]
+
+
+def test_no_level_when_not_recording():
+    levels = []
+    r = Recorder()
+    r.on_level = levels.append
+    r._on_audio(level_chunk(0.5), 1600, None, None)
+    assert levels == []
+
+
+def test_on_level_none_is_fine():
+    r = Recorder()
+    assert r.on_level is None
+    r.start()
+    feed(r, 300)
+    assert r.stop() is not None
+
+
+def test_on_level_exception_does_not_break_recording():
+    def boom(level):
+        raise RuntimeError("ui gone")
+
+    r = Recorder()
+    r.on_level = boom
+    r.start()
+    feed(r, 1000)
+    assert len(r.stop()) >= SR

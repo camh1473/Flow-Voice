@@ -35,22 +35,26 @@ class Engine:
         self.device = "cpu"
         self._model = self._factory(self._name, device="cpu", compute_type="int8")
 
-    def transcribe(self, audio: np.ndarray) -> str:
+    def transcribe(self, audio: np.ndarray, initial_prompt: str | None = None) -> str:
         audio = audio.astype(np.float32)
         try:
-            return self._run(audio)
+            return self._run(audio, initial_prompt)
         except RuntimeError:
             if self.device != "cuda":
                 raise
             self._fall_back_to_cpu()
-            return self._run(audio)
+            return self._run(audio, initial_prompt)
 
-    def _run(self, audio: np.ndarray) -> str:
+    def _run(self, audio: np.ndarray, initial_prompt: str | None) -> str:
+        options = {}
+        if initial_prompt:
+            options["initial_prompt"] = initial_prompt
         segments, _ = self._model.transcribe(
             audio,
             language="en",
             vad_filter=True,
             beam_size=1,
             condition_on_previous_text=False,
+            **options,
         )
         return " ".join(s.text.strip() for s in segments).strip()

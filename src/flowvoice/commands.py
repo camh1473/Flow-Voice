@@ -29,8 +29,8 @@ DEFAULT_COMMANDS: dict[str, str] = {
     "period": ".",
     "colon": ":",
     "hyphen": "-",
-    "dash": "—",
-    "em dash": "—",
+    "dash": "\u2014",
+    "em dash": "\u2014",
     "slash": "/",
     "dot": ".",
 }

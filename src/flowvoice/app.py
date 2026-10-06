@@ -32,6 +32,7 @@ class App:
         self._tag = ""
         self._inject_lock = threading.Lock()
         self._injecting = 0  # read lock-free by the hook thread
+        self._history_failed = False
         self.dictation = Dictation(engine.transcribe, self._clean, self._paste_text,
                                    on_error=ui.notify, on_done=self._on_done,
                                    on_result=self._on_result)
@@ -123,11 +124,14 @@ class App:
         if self.config.save_history and self.history is not None:
             try:
                 entry = self.history.add(raw, clean_text, app_name)
+                self._history_failed = False
             except Exception:
-                try:
-                    self.ui.notify("History unavailable")
-                except Exception:
-                    pass
+                if not self._history_failed:  # one toast per failure streak
+                    self._history_failed = True
+                    try:
+                        self.ui.notify("History unavailable")
+                    except Exception:
+                        pass
         if entry is None:
             entry = HistoryEntry(None, datetime.now().isoformat(timespec="seconds"),
                                  raw, clean_text, app_name)

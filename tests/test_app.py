@@ -245,6 +245,22 @@ def test_history_failure_does_not_block_paste_or_kill_worker():
     assert ui.states[-1] == "idle"
 
 
+def test_history_unavailable_notified_once_per_failure_streak():
+    hist = FakeHistory(fail=True)
+    app, pasted, ui, _ = make(history=hist)
+
+    def take():
+        app.on_ptt_start(); app.on_ptt_stop(); app.dictation.join()
+
+    take(); take(); take()
+    assert ui.notes.count("History unavailable") == 1
+    hist.fail = False
+    take()
+    hist.fail = True
+    take(); take()
+    assert ui.notes.count("History unavailable") == 2
+
+
 def test_add_history_failure_does_not_kill_worker():
     app, pasted, ui, _ = make()
 

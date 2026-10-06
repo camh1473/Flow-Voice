@@ -29,6 +29,7 @@ LIGHT = {
     "select": "#eaf3ff",
     "warn_bg": "#fff4e0",
     "warn_border": "#ffd9a0",
+    "warn_text": "#b35a00",
     "switch_off": "#d1d1d6",
 }
 
@@ -55,6 +56,7 @@ DARK = {
     "select": "#1f3552",
     "warn_bg": "#3a2d16",
     "warn_border": "#6b4a16",
+    "warn_text": "#ffb340",
     "switch_off": "#48484a",
 }
 
@@ -242,6 +244,8 @@ Switch {{
 }}
 #RowTitle {{ font-size: {f["body"]}px; font-weight: 500; }}
 #SliderValue {{ font-size: {f["small"]}px; color: {c["secondary"]}; }}
+#WarningText {{ font-size: {f["small"]}px; color: {c["warn_text"]}; }}
+QComboBox QLineEdit {{ background: transparent; border: none; padding: 0; }}
 #Separator {{ background: {c["separator"]}; border: none; }}
 #Footer {{ background: {c["bg"]}; border-top: 1px solid {c["separator"]}; }}
 QLineEdit[capturing="true"] {{ border: 1px solid {c["accent"]}; color: {c["accent"]}; }}

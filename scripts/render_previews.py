@@ -1,4 +1,5 @@
 """Render the pill states and the Home window to PNGs for visual review (.superpowers/preview/)."""
+import dataclasses
 import math
 import os
 import sys
@@ -134,6 +135,45 @@ def render_settings(dark: bool, scale: float = 1.0, scroll: float = 0.0,
     return image
 
 
+PREVIEW_V3 = Config(
+    dictionary_terms=["Perry Homes", "Bellaire", "Cypress Creek Lakes"],
+    dictionary_fixes={"perry homes": "Perry Homes", "flow boys": "Flow Voice"},
+    snippets={"my signature": "Best,\nCam", "new line": "\n", "office hours": "Mon-Fri 9-5"},
+    ai_enabled=True)
+
+
+class _PreviewProbe:
+    def list_models(self, cfg):
+        return ["qwen3.5:2b-q4_K_M", "llama3.2:3b"]
+
+    def test(self, cfg):
+        return "OK in 2.4 s: Shopping list: - Apples - Bread - Milk"
+
+
+def render_settings_words(dark: bool, scale: float = 1.0,
+                          size: tuple[int, int] = (880, 1560)) -> QImage:
+    """The Settings tab scrolled so the Words, Snippets and Lists and AI cards are in view."""
+    settings = QSettings(str(Path(tempfile.gettempdir()) / "flowvoice-preview.ini"),
+                         QSettings.IniFormat)
+    mics = [("System default", None), ("1: Microphone (USB Audio)", 1)]
+    win = MainWindow(dataclasses.replace(PREVIEW_V3, ui_scale=scale), None, lambda cfg: None,
+                     settings=settings, mics=mics, dark=dark, ai_probe=_PreviewProbe())
+    win.resize(round(size[0] * scale), round(size[1] * scale))
+    win.show_page("Settings")
+    win.show()
+    win.set_ai_status("missing model", "ollama pull qwen3.5:2b-q4_K_M")
+    QApplication.processEvents()
+    view = win.settings_view
+    caption = view.terms_edit.parentWidget()
+    bar = view.scroll.verticalScrollBar()
+    bar.setValue(min(bar.maximum(), caption.y() - round(40 * scale)))
+    QApplication.processEvents()
+    image = win.grab().toImage()
+    win.request_quit()
+    win.close()
+    return image
+
+
 def main() -> None:
     app = QApplication.instance() or QApplication([])
     OUT.mkdir(parents=True, exist_ok=True)
@@ -163,6 +203,10 @@ def main() -> None:
     path = OUT / "settings_light_tall.png"
     render_settings(False, size=(880, 1700)).save(str(path))
     print(path)
+    for name, dark in (("light", False), ("dark", True)):
+        path = OUT / f"settings_words_{name}.png"
+        render_settings_words(dark).save(str(path))
+        print(path)
     path = OUT / "home_recording.png"
     render_home(False, "recording").save(str(path))
     print(path)

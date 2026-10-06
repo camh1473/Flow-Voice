@@ -50,12 +50,13 @@ def rows_to_commands(rows: list[tuple[str, str]]) -> dict[str, str]:
 
 
 def _row_key(key: str, lower_keys: bool) -> str:
-    key = key.strip()
+    key = " ".join(key.split())
     return key.lower() if lower_keys else key
 
 
 def rows_to_dict(rows: list[tuple[str, str]], *, lower_keys: bool, limit: int) -> dict[str, str]:
-    """Table rows -> mapping: keys trimmed (and lowercased if asked), blanks dropped, values
+    """Table rows -> mapping: keys trimmed with inner whitespace collapsed to one space (and
+    lowercased if asked), blanks dropped, values
     unescaped but not trimmed, later rows win, first `limit` distinct keys kept."""
     out: dict[str, str] = {}
     for key, value in rows:

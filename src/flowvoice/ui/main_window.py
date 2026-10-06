@@ -66,7 +66,8 @@ class MainWindow(QMainWindow):
     """Closing hides the window; only request_quit() lets it really close.
 
     Page seam: `set_history_view(widget)` and `set_settings_view(widget)` swap a page in the
-    stack, update the matching attribute and pass the UI scale to the page's `set_scale`.
+    stack, update the matching attribute and pass the UI scale to the page's `set_scale`;
+    a new settings page also gets the last `set_ai_status`.
     `capture_started` / `capture_finished` forward the current settings page's hotkey
     capture lifecycle (the app pauses its global hotkeys in between).
     """
@@ -83,6 +84,7 @@ class MainWindow(QMainWindow):
         settings: QSettings | None = None,
         mics: list[tuple[str, int | None]] | None = None,
         dark: bool | None = None,
+        ai_probe=None,
     ) -> None:
         super().__init__()
         self.config = config
@@ -91,6 +93,7 @@ class MainWindow(QMainWindow):
         self.mics = mics
         self._settings = settings if settings is not None else QSettings("FlowVoice", "FlowVoice")
         self._quitting = False
+        self._ai_status = ("off", "")
         self._follow_system = dark is None
         app = QApplication.instance()
         self._dark = theme.is_dark(app) if dark is None else dark
@@ -127,7 +130,8 @@ class MainWindow(QMainWindow):
         self.history_view: QWidget = HistoryView(history)
         self._link_history(self.history_view)
         self._set_saving(config.save_history)
-        self.settings_view: QWidget = SettingsView(config, self.mics or mic_choices(), on_save_config)
+        self.settings_view: QWidget = SettingsView(config, self.mics or mic_choices(), on_save_config,
+                                                   ai_probe=ai_probe)
         self._link_capture(self.settings_view, True)
         for page in (self.home, self.history_view, self.settings_view):
             self.pages.addWidget(page)
@@ -201,6 +205,17 @@ class MainWindow(QMainWindow):
         self._replace_page(self.settings_view, widget)
         self.settings_view = widget
         self._scale_pages()
+        self._forward_ai_status()
+
+    def set_ai_status(self, status: str, detail: str) -> None:
+        """Show the AI status on the Settings page; safe to call from any thread."""
+        self._ai_status = (status, detail)
+        self._forward_ai_status()
+
+    def _forward_ai_status(self) -> None:
+        setter = getattr(self.settings_view, "set_ai_status", None)
+        if setter is not None:
+            setter(*self._ai_status)
 
     def _link_capture(self, page: QWidget, connect: bool) -> None:
         for name in ("capture_started", "capture_finished"):

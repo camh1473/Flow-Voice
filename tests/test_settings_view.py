@@ -467,3 +467,280 @@ def test_main_window_apply_scale_scales_settings(window):
     before = window.settings_view.hands_free_switch.sizeHint()
     window.apply_scale(1.5)
     assert window.settings_view.hands_free_switch.sizeHint().width() > before.width()
+
+
+# ----- Words, Snippets, Lists and AI -----
+
+V3 = Config(dictionary_terms=["Perry Homes", "Bellaire"],
+            dictionary_fixes={"perry homes": "Perry Homes", "flow boys": "Flow Voice"},
+            snippets={"my sig": "Best,\nCam\t(Perry)", "my address": "123 Main St \\ Unit 4"},
+            auto_lists=False, ai_enabled=True, ai_model="llama3.2:3b", ai_min_words=42,
+            ai_timeout_seconds=9.5, ai_url="http://127.0.0.1:11500")
+
+
+class FakeProbe:
+    """Duck-typed ai_probe; optionally blocks until `release` is set."""
+
+    def __init__(self, models=None, result="OK in 1.2 s: sample", block=False, error=None):
+        self.models = models if models is not None else ["qwen3.5:2b-q4_K_M", "llama3.2:3b"]
+        self.result = result
+        self.error = error
+        self.release = threading.Event()
+        if not block:
+            self.release.set()
+        self.started = threading.Event()
+        self.calls: list[tuple[str, Config]] = []
+        self.threads: list[threading.Thread] = []
+
+    def _enter(self, name, cfg):
+        self.calls.append((name, cfg))
+        self.threads.append(threading.current_thread())
+        self.started.set()
+        self.release.wait(5)
+        if self.error is not None:
+            raise self.error
+
+    def list_models(self, cfg):
+        self._enter("list_models", cfg)
+        return list(self.models)
+
+    def test(self, cfg):
+        self._enter("test", cfg)
+        return self.result
+
+
+def _ai_view(probe=None, config=None) -> SettingsView:
+    return SettingsView(config or Config(), MICS, lambda c: None, ai_probe=probe)
+
+
+def test_v3_defaults_round_trip(qapp):
+    assert _ai_view().to_config() == Config()
+
+
+def test_v3_non_default_values_round_trip(qapp):
+    assert _ai_view(config=V3).to_config() == V3
+
+
+def test_v3_load_repopulates_every_new_control(qapp):
+    view = _ai_view()
+    view.load(V3)
+    assert view.terms_edit.toPlainText() == "Perry Homes\nBellaire"
+    assert ("flow boys", "Flow Voice") in view.fix_rows()
+    assert ("my sig", "Best,\\nCam\\t(Perry)") in view.snippet_rows()
+    assert not view.auto_lists_switch.isChecked()
+    assert view.ai_switch.isChecked()
+    assert view.ai_model_combo.currentText() == "llama3.2:3b"
+    assert view.ai_min_words.value() == 42
+    assert view.to_config() == V3
+    view.load(Config())
+    assert view.to_config() == Config()
+
+
+def test_v3_changing_every_new_control_is_reflected(qapp):
+    view = _ai_view(config=Config(ai_timeout_seconds=12.0, ai_url="http://[::1]:11434"))
+    view.terms_edit.setPlainText("Perry Homes\n\n  bellaire \nperry homes\nKaty\n")
+    view.add_fix_row("  Flow   BOYS ", "Flow Voice")
+    view.add_fix_row("", "dropped")
+    view.add_snippet_row("My Sig", "Best,\\nCam")
+    view.auto_lists_switch.setChecked(False)
+    view.ai_switch.setChecked(True)
+    view.ai_model_combo.setEditText("  llama3.2:3b ")
+    view.ai_min_words.setValue(30)
+    cfg = view.to_config()
+    assert cfg.dictionary_terms == ["Perry Homes", "bellaire", "Katy"]
+    assert cfg.dictionary_fixes == {"flow boys": "Flow Voice"}
+    assert cfg.snippets == {"my sig": "Best,\nCam"}
+    assert cfg.auto_lists is False
+    assert cfg.ai_enabled is True
+    assert cfg.ai_model == "llama3.2:3b"
+    assert cfg.ai_min_words == 30
+    assert cfg.ai_timeout_seconds == 12.0
+    assert cfg.ai_url == "http://[::1]:11434"
+
+
+def test_v3_blank_model_keeps_loaded_value(qapp):
+    view = _ai_view(config=Config(ai_model="llama3.2:3b"))
+    view.ai_model_combo.setEditText("   ")
+    assert view.to_config().ai_model == "llama3.2:3b"
+
+
+def test_min_words_range(qapp):
+    view = _ai_view()
+    assert (view.ai_min_words.minimum(), view.ai_min_words.maximum()) == (5, 200)
+
+
+def test_fix_and_snippet_buttons_add_and_remove_rows(qapp):
+    view = _ai_view(config=V3)
+    view.add_fix_button.click()
+    assert view.fixes_table.rowCount() == 3
+    view.fixes_table.setCurrentCell(0, 0)
+    view.remove_fix_button.click()
+    assert view.fixes_table.rowCount() == 2
+    assert view.to_config().dictionary_fixes == {"flow boys": "Flow Voice"}
+    view.add_snippet_button.click()
+    assert view.snippets_table.rowCount() == 3
+    view.snippets_table.setCurrentCell(0, 0)
+    view.remove_snippet_button.click()
+    assert view.to_config().snippets == {"my address": "123 Main St \\ Unit 4"}
+
+
+def test_snippet_warnings_label_tracks_current_rows(qapp):
+    view = _ai_view(config=Config(command_phrases={"new line": "\n"}))
+    assert view.snippet_warnings_label.isHidden()
+    row = view.add_snippet_row("new line", "x")
+    assert not view.snippet_warnings_label.isHidden()
+    assert "is also a spoken command" in view.snippet_warnings_label.text()
+    view.snippets_table.item(row, 0).setText("my sig")
+    assert view.snippet_warnings_label.isHidden()
+    view.add_snippet_row("My  Sig", "y")
+    assert "my sig" in view.snippet_warnings_label.text()
+    assert "more than one" in view.snippet_warnings_label.text()
+    view.snippets_table.setCurrentCell(1, 0)
+    view.remove_snippet_button.click()
+    assert view.snippet_warnings_label.isHidden()
+
+
+def test_snippet_warnings_follow_command_table_edits(qapp):
+    view = _ai_view(config=Config(command_phrases={}, snippets={"full stop": "."}))
+    assert view.snippet_warnings_label.isHidden()
+    view.add_command_row("full stop", ".")
+    assert "is also a spoken command" in view.snippet_warnings_label.text()
+
+
+def test_refresh_fills_models_off_gui_thread_keeping_text(qapp):
+    probe = FakeProbe(block=True)
+    view = _ai_view(probe, Config(ai_model="my-custom:1b"))
+    started = time.monotonic()
+    view.refresh_models_button.click()
+    assert time.monotonic() - started < 1.0
+    assert probe.started.wait(2)
+    assert not view.refresh_models_button.isEnabled()
+    assert view.refresh_models_button.text() == "Refreshing..."
+    view.refresh_models_button.click()
+    view._refresh_models()
+    ticks = []
+    from PySide6.QtCore import QTimer
+    QTimer.singleShot(0, lambda: ticks.append(1))
+    assert _wait(lambda: ticks == [1])
+    assert view.ai_model_combo.count() <= 1
+    probe.release.set()
+    assert _wait(lambda: view.ai_model_combo.count() == 2)
+    assert [view.ai_model_combo.itemText(i) for i in range(2)] == probe.models
+    assert view.ai_model_combo.currentText() == "my-custom:1b"
+    assert view.refresh_models_button.isEnabled()
+    assert view.refresh_models_button.text() == "Refresh"
+    assert [c[0] for c in probe.calls] == ["list_models"]
+    assert probe.threads[0] is not threading.main_thread()
+
+
+def test_refresh_failure_shows_error(qapp):
+    view = _ai_view(FakeProbe(error=OSError("connection refused")))
+    view.refresh_models_button.click()
+    assert _wait(lambda: "connection refused" in view.ai_result_label.text())
+    assert view.refresh_models_button.isEnabled()
+
+
+def test_test_button_runs_probe_with_unsaved_settings_off_gui_thread(qapp):
+    probe = FakeProbe(block=True, result="OK in 2.3 s: Shopping list")
+    view = _ai_view(probe)
+    view.ai_model_combo.setEditText("llama3.2:3b")
+    view.test_ai_button.click()
+    assert probe.started.wait(2)
+    assert not view.test_ai_button.isEnabled()
+    assert view.test_ai_button.text() == "Testing..."
+    view.test_ai_button.click()
+    view._run_test()
+    probe.release.set()
+    assert _wait(lambda: view.ai_result_label.text() == "OK in 2.3 s: Shopping list")
+    assert view.test_ai_button.isEnabled()
+    assert view.test_ai_button.text() == "Test AI"
+    assert len(probe.calls) == 1
+    assert probe.calls[0][1].ai_model == "llama3.2:3b"
+    assert probe.threads[0] is not threading.main_thread()
+
+
+def test_test_button_shows_failure_string_and_raised_error(qapp):
+    view = _ai_view(FakeProbe(result="Ollama is not running"))
+    view.test_ai_button.click()
+    assert _wait(lambda: view.ai_result_label.text() == "Ollama is not running")
+    view2 = _ai_view(FakeProbe(error=RuntimeError("boom " + "x" * 300)))
+    view2.test_ai_button.click()
+    assert _wait(lambda: "boom" in view2.ai_result_label.text())
+    assert len(view2.ai_result_label.text()) < 200
+    assert view2.test_ai_button.isEnabled()
+
+
+def test_result_after_view_destroyed_does_not_raise(qapp, monkeypatch):
+    from PySide6.QtCore import QCoreApplication, QEvent
+    errors = []
+    monkeypatch.setattr(threading, "excepthook", lambda args: errors.append(args))
+    probe = FakeProbe(block=True)
+    view = _ai_view(probe)
+    view.test_ai_button.click()
+    view.refresh_models_button.click()
+    assert probe.started.wait(2)
+    view.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+    probe.release.set()
+    deadline = time.monotonic() + 2
+    while len(probe.threads) < 2 and time.monotonic() < deadline:
+        time.sleep(0.01)
+    for t in probe.threads:
+        t.join(2)
+    _wait(lambda: False, 0.1)
+    assert errors == []
+
+
+def test_no_probe_disables_buttons_with_tooltip(qapp):
+    view = _ai_view(None)
+    for button in (view.refresh_models_button, view.test_ai_button):
+        assert not button.isEnabled()
+        assert button.toolTip() == "AI is not available"
+    view.refresh_models_button.click()
+    view._run_test()
+    view._refresh_models()
+    assert view.to_config() == Config()
+
+
+@pytest.mark.parametrize("status, detail, expected", [
+    ("ready", "", "AI: ready"),
+    ("warming", "", "AI: warming up..."),
+    ("off", "", "AI: off"),
+    ("unavailable", "Ollama is not running", "AI: unavailable - Ollama is not running"),
+    ("missing model", "ollama pull x",
+     "AI: model not installed - run: ollama pull x"),
+])
+def test_set_ai_status_texts(qapp, status, detail, expected):
+    view = _ai_view()
+    view.set_ai_status(status, detail)
+    assert view.ai_status_label.text() == expected
+
+
+def test_set_ai_status_from_plain_thread_is_queued(qapp):
+    view = _ai_view()
+    before = view.ai_status_label.text()
+    t = threading.Thread(target=view.set_ai_status, args=("ready", ""))
+    t.start()
+    t.join(2)
+    assert view.ai_status_label.text() == before
+    assert _wait(lambda: view.ai_status_label.text() == "AI: ready")
+
+
+def test_new_cards_follow_scale(qapp):
+    view = _ai_view()
+    sizes = (view.ai_switch.sizeHint().width(), view.ai_model_combo.width(),
+             view.fixes_table.height(), view.terms_edit.height())
+    view.set_scale(1.5)
+    grown = (view.ai_switch.sizeHint().width(), view.ai_model_combo.width(),
+             view.fixes_table.height(), view.terms_edit.height())
+    assert all(b > a for a, b in zip(sizes, grown))
+    assert view.ai_min_words.width() > 0
+
+
+def test_new_cards_sit_inside_scroll_area_and_save_bar_stays(qapp):
+    view = _ai_view()
+    body = view.scroll.widget()
+    for widget in (view.terms_edit, view.fixes_table, view.snippets_table,
+                   view.ai_switch, view.test_ai_button):
+        assert body.isAncestorOf(widget)
+    assert not body.isAncestorOf(view.save_button)

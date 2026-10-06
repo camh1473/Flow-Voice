@@ -56,6 +56,45 @@ def test_set_settings_view_replaces_page(window):
     assert window.pages.currentWidget() is new
 
 
+class _Probe:
+    def list_models(self, cfg):
+        return []
+
+    def test(self, cfg):
+        return "OK"
+
+
+def test_ai_probe_reaches_settings_view(qapp, tmp_path):
+    settings = QSettings(str(tmp_path / "ai.ini"), QSettings.IniFormat)
+    win = MainWindow(Config(), None, lambda c: None, settings=settings,
+                     mics=[("System default", None)], ai_probe=_Probe())
+    assert win.settings_view.test_ai_button.isEnabled()
+    assert win.settings_view.refresh_models_button.isEnabled()
+    win.request_quit()
+    win.close()
+
+
+def test_without_ai_probe_settings_buttons_disabled(window):
+    assert not window.settings_view.test_ai_button.isEnabled()
+
+
+def test_set_ai_status_forwards_to_settings_view(window):
+    window.set_ai_status("ready", "")
+    assert window.settings_view.ai_status_label.text() == "AI: ready"
+
+
+def test_set_ai_status_survives_seam_replace(window):
+    from flowvoice.ui.settings_view import SettingsView
+    window.set_ai_status("missing model", "ollama pull y")
+    new = SettingsView(Config(), [("System default", None)], lambda c: None)
+    window.set_settings_view(new)
+    assert new.ai_status_label.text() == "AI: model not installed - run: ollama pull y"
+    window.set_ai_status("ready", "")
+    assert new.ai_status_label.text() == "AI: ready"
+    window.set_settings_view(QWidget())
+    window.set_ai_status("off", "")
+
+
 def test_set_state_changes_status_text(qapp):
     home = HomeView()
     idle = home.status_label.text()

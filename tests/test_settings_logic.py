@@ -106,6 +106,13 @@ def test_rows_duplicates_reports_normalised_keys_once_in_order():
     assert rows_duplicates([("x", "1"), ("y", "2")], lower_keys=True) == []
 
 
+def test_row_keys_collapse_internal_whitespace_values_untouched():
+    rows = [("  my   Sig ", "Best,  Cam "), ("my sig\t", "x  y")]
+    assert rows_to_dict(rows, lower_keys=True, limit=10) == {"my sig": "x  y"}
+    assert rows_to_dict([("A  B", " v  ")], lower_keys=False, limit=10) == {"A B": " v  "}
+    assert rows_duplicates(rows, lower_keys=True) == ["my sig"]
+
+
 def test_snippet_warnings_command_collision_short_trigger_and_empty_text():
     snippets = {"new line": "x", "ab": "hello", "sig": "  ", "ok one": "fine"}
     out = snippet_warnings(snippets, {"New Line": "\n"})

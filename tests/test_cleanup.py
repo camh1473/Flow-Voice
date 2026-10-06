@@ -109,6 +109,25 @@ def test_break_only_take_keeps_its_break():
     assert clean("New line.", commands=DEFAULT_COMMANDS) == "\n"
 
 
+def test_before_commands_hook_runs_after_backtracking_before_commands():
+    seen: list[str] = []
+
+    def hook(t: str) -> str:
+        seen.append(t)
+        return t.replace("Alice", "Carol")
+
+    out = clean("Send it to Bob. Scratch that. Send it to Alice new line ok",
+                before_commands=hook, commands=DEFAULT_COMMANDS)
+    assert seen == ["Send it to Alice new line ok"]
+    assert out == "Send it to Carol\nOk"
+
+
+def test_before_commands_none_keeps_behavior():
+    assert clean("um hello new line world", before_commands=None,
+                 commands=DEFAULT_COMMANDS) == "Hello\nWorld"
+    assert clean("I I I want the the report", before_commands=None) == "I want the report"
+
+
 def test_leading_break_after_dropped_filler_is_consistent():
     assert clean("Um, new line, uh, test.", commands=DEFAULT_COMMANDS) == "\nTest."
     assert clean("new line, test.", commands=DEFAULT_COMMANDS) == "\nTest."

@@ -1,4 +1,5 @@
 import re
+from collections.abc import Callable
 
 from flowvoice.commands import apply_commands
 
@@ -62,8 +63,11 @@ def _capitalize(m: re.Match) -> str:
 
 def clean(text: str, *, fillers=DEFAULT_FILLER_PHRASES,
           backtracks=DEFAULT_BACKTRACK_PHRASES,
-          commands: dict[str, str] | None = None) -> str:
+          commands: dict[str, str] | None = None,
+          before_commands: Callable[[str], str] | None = None) -> str:
     text = _apply_backtracks(text, backtracks)
+    if before_commands is not None:
+        text = before_commands(text)
     if commands is not None:
         text = apply_commands(text, commands)
     text = _FILLER.sub("", text)

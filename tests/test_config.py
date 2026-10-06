@@ -75,6 +75,16 @@ def test_ui_scale_clamped_on_load(tmp_path):
     assert load_config(p).ui_scale == 0.8
 
 
+def test_silence_stop_seconds_clamped_on_load(tmp_path):
+    p = tmp_path / "c.json"
+    for bad in (0, -3, 0.2):
+        p.write_text(json.dumps({"silence_stop_seconds": bad}))
+        assert load_config(p).silence_stop_seconds == 0.5
+    p.write_text(json.dumps({"silence_stop_seconds": 2}))
+    c = load_config(p)
+    assert c.silence_stop_seconds == 2.0 and isinstance(c.silence_stop_seconds, float)
+
+
 def test_ensure_config_file_writes_once_on_first_run(tmp_path):
     from flowvoice.config import ensure_config_file
     p = tmp_path / "sub" / "c.json"

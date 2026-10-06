@@ -26,6 +26,7 @@ class Config:
 
 
 UI_SCALE_MIN, UI_SCALE_MAX = 0.8, 1.6
+SILENCE_STOP_MIN = 0.5  # a hand-edited 0 must not end a take right after the first word
 
 
 def _is_num(v) -> bool:
@@ -63,7 +64,8 @@ def load_config(path: Path | None = None) -> Config:
         if "ui_scale" in kwargs:
             kwargs["ui_scale"] = float(min(UI_SCALE_MAX, max(UI_SCALE_MIN, kwargs["ui_scale"])))
         if "silence_stop_seconds" in kwargs:
-            kwargs["silence_stop_seconds"] = float(kwargs["silence_stop_seconds"])
+            kwargs["silence_stop_seconds"] = float(
+                max(SILENCE_STOP_MIN, kwargs["silence_stop_seconds"]))
         return Config(**kwargs)
     except Exception:
         return Config()

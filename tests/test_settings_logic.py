@@ -1,5 +1,5 @@
 from flowvoice.config import Config
-from flowvoice.settings import needs_restart, parse_phrases
+from flowvoice.settings_logic import needs_restart, parse_phrases
 
 
 def test_parse_phrases_one_per_line_trimmed_deduped():

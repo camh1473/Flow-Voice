@@ -1,0 +1,36 @@
+"""Spoken punctuation/formatting commands (constants only for now)."""
+
+DEFAULT_COMMANDS: dict[str, str] = {
+    # always convert
+    "new line": "\n",
+    "new paragraph": "\n\n",
+    "bullet point": "\n- ",
+    "question mark": "?",
+    "exclamation point": "!",
+    "exclamation mark": "!",
+    "full stop": ".",
+    "comma": ",",
+    "semicolon": ";",
+    "ellipsis": "...",
+    "open quote": '"',
+    "close quote": '"',
+    "open paren": "(",
+    "close paren": ")",
+    "open bracket": "[",
+    "close bracket": "]",
+    "at sign": "@",
+    "underscore": "_",
+    "ampersand": "&",
+    "percent sign": "%",
+    "dollar sign": "$",
+    "plus sign": "+",
+    "equals sign": "=",
+    # guarded
+    "period": ".",
+    "colon": ":",
+    "hyphen": "-",
+    "dash": "—",
+    "em dash": "—",
+    "slash": "/",
+    "dot": ".",
+}

@@ -28,6 +28,7 @@ class Config:
     dictionary_fixes: dict[str, str] = field(default_factory=dict)
     snippets: dict[str, str] = field(default_factory=dict)
     auto_lists: bool = True
+    auto_questions: bool = True
     ai_enabled: bool = False
     ai_model: str = "qwen3.5:2b-q4_K_M"
     ai_min_words: int = 20
@@ -52,7 +53,7 @@ def _valid(name: str, v) -> bool:
     if name == "mic_device":
         return v is None or (isinstance(v, int) and not isinstance(v, bool))
     if name in ("start_with_windows", "voice_commands", "hands_free",
-                "save_history", "pill_always_visible", "auto_lists", "ai_enabled"):
+                "save_history", "pill_always_visible", "auto_lists", "auto_questions", "ai_enabled"):
         return isinstance(v, bool)
     if name in ("filler_phrases", "backtrack_phrases", "dictionary_terms"):
         return isinstance(v, list) and all(isinstance(x, str) for x in v)

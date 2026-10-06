@@ -845,3 +845,10 @@ def test_ready_status_clears_a_stale_model_list_error(qapp):
     view.ai_result_label.setText("OK in 1.2 s: sample")
     view._apply_ai_status("ready", "")
     assert view.ai_result_label.text() == "OK in 1.2 s: sample"
+
+
+def test_auto_questions_switch_round_trips(qapp):
+    view = _ai_view()
+    assert view.auto_questions_switch.isChecked()
+    view.auto_questions_switch.setChecked(False)
+    assert view.to_config().auto_questions is False

@@ -459,6 +459,7 @@ class SettingsView(QWidget):
     def _build_lists_ai(self, page: QVBoxLayout) -> None:
         card = self._section(page, "Lists and AI")
         self.auto_lists_switch = self._switch()
+        self.auto_questions_switch = self._switch()
         self.ai_switch = self._switch()
         self.ai_model_combo = self._combo()
         self.ai_model_combo.setEditable(True)
@@ -479,6 +480,9 @@ class SettingsView(QWidget):
                   'Say "one, ... two, ..." or "first, ... second, ..." to get a numbered list, '
                   'or "shopping list: apples, bread and milk" for bullets.',
                   self.auto_lists_switch, first=True)
+        self._row(card, "Automatic question marks",
+                  'A sentence like "what time is it" or "are you coming" ends with a "?".',
+                  self.auto_questions_switch)
         self._row(card, "AI polish",
                   "A local Ollama model splits long dictations into paragraphs and lists; "
                   'nothing leaves this PC. It may drop "and" or "then" to make a list; '
@@ -559,6 +563,7 @@ class SettingsView(QWidget):
         self._fill(self.fixes_table, config.dictionary_fixes)
         self._fill(self.snippets_table, config.snippets)
         self.auto_lists_switch.setChecked(config.auto_lists)
+        self.auto_questions_switch.setChecked(config.auto_questions)
         self.ai_switch.setChecked(config.ai_enabled)
         if self.ai_model_combo.findText(config.ai_model) < 0:
             self.ai_model_combo.addItem(config.ai_model)
@@ -586,6 +591,7 @@ class SettingsView(QWidget):
             dictionary_fixes=rows_to_dict(self.fix_rows(), lower_keys=True, limit=MAX_FIXES),
             snippets=rows_to_dict(self.snippet_rows(), lower_keys=True, limit=MAX_SNIPPETS),
             auto_lists=self.auto_lists_switch.isChecked(),
+            auto_questions=self.auto_questions_switch.isChecked(),
             ai_enabled=self.ai_switch.isChecked(),
             ai_model=self.ai_model_combo.currentText().strip() or self._base.ai_model,
             ai_min_words=self.ai_min_words.value(),

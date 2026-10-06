@@ -277,3 +277,11 @@ def test_thread_safety_snippets_never_cross():
     tb.join()
     assert set(results["a"]) == {"Hello AAA-expansion there"}
     assert set(results["b"]) == {"Hello BBB-expansion there"}
+
+
+def test_questions_get_a_mark_and_the_switch_turns_it_off():
+    from flowvoice.config import Config
+    from flowvoice.postprocess import Postprocessor
+    p = Postprocessor(None)
+    assert p.process("what time is it", Config()) == "What time is it?"
+    assert p.process("what time is it", Config(auto_questions=False)) == "What time is it."

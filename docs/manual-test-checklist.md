@@ -66,3 +66,4 @@ Settings pages: Words, Snippets, Lists and AI. Use Notepad as the target.
 47. [ ] **Model missing.** Type a model name that is not installed (for example `nosuchmodel:1b`) in AI model, Save. Expected: the status says the model is not installed and shows `ollama pull nosuchmodel:1b`; dictation still pastes normal text. Set the model back to `qwen3.5:2b-q4_K_M`.
 48. [ ] **Quit leaves Ollama alone.** With AI ready, quit Flow Voice from the tray. Expected: Ollama keeps running (check its tray icon or Task Manager).
 49. [ ] **Disable AI.** Switch AI polish off, Save. Expected: the status shows "AI: off" and dictation pastes the normal text with no delay.
+50. [ ] **Question marks.** Say "what time is it" and "are you coming tomorrow": each pastes ending in ?. Say "what I need is a break" and "do the dishes": still end in a period. Turn **Automatic question marks** off in Settings, Save, repeat: no question marks added. Turn it back on.

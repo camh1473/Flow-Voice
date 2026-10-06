@@ -3,6 +3,7 @@ from flowvoice.ai_polish import AiService, count_words
 from flowvoice.cleanup import clean
 from flowvoice.config import Config
 from flowvoice.lists import format_lists
+from flowvoice.questions import add_question_marks
 from flowvoice.snippets import expand_snippets, protect_snippets
 from flowvoice.vocabulary import apply_dictionary, glossary_prompt
 
@@ -48,6 +49,8 @@ class Postprocessor:
                     commands=cfg.command_phrases if cfg.voice_commands else None,
                     before_commands=protect)
         out = _safe(lambda t: apply_dictionary(t, cfg.dictionary_terms, cfg.dictionary_fixes), out)
+        if cfg.auto_questions:
+            out = _safe(add_question_marks, out)
         if cfg.auto_lists:
             out = _safe(format_lists, out)
         if self.ai is not None and cfg.ai_enabled and count_words(out) <= MAX_AI_WORDS:

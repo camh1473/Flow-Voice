@@ -15,6 +15,10 @@ class Clock:
 
 
 def make(**kw):
+    # Legacy tests feed a single level() call as "speech heard"; the sustained-speech
+    # rule (min_speech_seconds) is exercised explicitly by the real_* tests below.
+    kw.setdefault("min_speech_seconds", 0.0)
+    kw.setdefault("settle_seconds", 0.0)
     clock = Clock()
     events: list[str] = []
     tm = TalkMode(lambda: events.append("start"), lambda: events.append("stop"),
@@ -273,14 +277,9 @@ def test_held_press_never_silence_stops():
 def test_max_seconds_caps_latched_take():
     tm, clock, events = make()
     tm.click()
-    for _ in range(299):
-        clock.advance(1.0)
-        tm.level(0.5)
-        tm.tick()
+    talk(tm, clock, 299.0)  # speech-like levels the whole time: never silent
     assert tm.state == "latched"
-    clock.advance(1.0)
-    tm.level(0.5)
-    tm.tick()
+    talk(tm, clock, 2.0)
     assert events == ["start", "stop"]
 
 
@@ -345,7 +344,7 @@ def test_callback_may_reenter_same_thread_without_deadlock():
         tm.click()
 
     tm = TalkMode(on_start, lambda: events.append("stop"), lambda: events.append("cancel"),
-                  clock=clock)
+                  clock=clock, min_speech_seconds=0.0, settle_seconds=0.0)
     holder["tm"] = tm
     done = threading.Event()
 
@@ -375,7 +374,7 @@ def _race(second_call):
     clock = Clock()
     holder: dict = {}
     tm = TalkMode(_gated(events, gate, entered, holder), lambda: events.append("stop"),
-                  lambda: events.append("cancel"), clock=clock)
+                  lambda: events.append("cancel"), clock=clock, min_speech_seconds=0.0, settle_seconds=0.0)
     holder["tm"] = tm
     a = threading.Thread(target=tm.click, daemon=True)
     a.start()
@@ -405,3 +404,125 @@ def test_cross_thread_press_waits_for_pending_start():
     assert early == []
     assert events == ["start", "stop"]
     assert tm.state == "idle"
+
+
+# --- silence detection must be relative to the room's noise floor -------------------
+# A Razer Seiren Mini sits at a steady 0.054-0.073 on the rms*10 scale, right next to the
+# fixed 0.05 voice threshold: noise counted as speech, then a dip below 0.05 for 4 s
+# looked like "silence after speech" and stopped a take where nobody had spoken.
+
+def real(**kw):
+    return make(min_speech_seconds=0.25, settle_seconds=0.6, **kw)
+
+
+def feed(tm, clock, level, seconds, step=0.05, tick_every=0.2):
+    elapsed = since_tick = 0.0
+    while elapsed < seconds - 1e-9:
+        tm.level(level)
+        clock.advance(step)
+        elapsed += step
+        since_tick += step
+        if since_tick >= tick_every - 1e-9:
+            tm.tick()
+            since_tick = 0.0
+
+
+def talk(tm, clock, seconds, loud=0.5, dip=0.12):
+    """Speech-like levels: 0.4 s of voice, then a 0.1 s dip between words."""
+    elapsed = 0.0
+    while elapsed < seconds - 1e-9:
+        feed(tm, clock, loud, 0.4)
+        feed(tm, clock, dip, 0.1)
+        elapsed += 0.5
+
+
+def test_noise_dipping_below_old_threshold_never_arms_silence_stop():
+    tm, clock, events = real()
+    latch(tm, clock)
+    feed(tm, clock, 0.065, 3.0)   # steady mic noise above the old 0.05 threshold
+    feed(tm, clock, 0.03, 9.0)    # then the room gets quieter than that
+    assert tm.state == "latched"
+    assert events == ["start", "cancel", "start"]
+
+
+def test_steady_mic_noise_alone_never_stops_a_latched_take():
+    tm, clock, events = real()
+    latch(tm, clock)
+    feed(tm, clock, 0.07, 30.0)
+    assert tm.state == "latched"
+    assert events == ["start", "cancel", "start"]
+
+
+def test_key_click_spike_is_not_speech():
+    tm, clock, events = real()
+    latch(tm, clock)
+    feed(tm, clock, 0.04, 0.5)
+    tm.level(0.8)                 # one short click/pop
+    clock.advance(0.03)
+    feed(tm, clock, 0.04, 9.0)
+    assert tm.state == "latched"
+    assert events == ["start", "cancel", "start"]
+
+
+def test_real_speech_then_silence_still_stops_with_stop_not_cancel():
+    tm, clock, events = real()
+    latch(tm, clock)
+    feed(tm, clock, 0.065, 1.0)
+    talk(tm, clock, 2.0)
+    feed(tm, clock, 0.065, 5.0)   # back to mic noise: 4 s of quiet after speech
+    assert events == ["start", "cancel", "start", "stop"]
+    assert tm.state == "idle"
+
+
+def test_speaking_from_the_very_first_chunk_is_detected():
+    tm, clock, events = real()
+    tm.click()                    # latch by clicking, speak at once
+    talk(tm, clock, 3.0)
+    feed(tm, clock, 0.065, 5.0)
+    assert events == ["start", "stop"]
+
+
+def test_long_continuous_speech_does_not_silence_stop():
+    tm, clock, events = real()
+    tm.click()
+    talk(tm, clock, 40.0)
+    assert tm.state == "latched"
+    assert events == ["start"]
+
+
+def test_quiet_room_below_threshold_still_needs_real_speech():
+    tm, clock, events = real()
+    latch(tm, clock)
+    feed(tm, clock, 0.01, 15.0)
+    assert tm.state == "latched"
+    assert events == ["start", "cancel", "start"]
+
+
+def test_one_glitched_zero_chunk_does_not_let_mic_noise_count_as_voice():
+    tm, clock, events = real()
+    latch(tm, clock)
+    feed(tm, clock, 0.065, 1.0)
+    tm.level(0.0)                 # driver glitch: a single all-zero chunk
+    clock.advance(0.05)
+    feed(tm, clock, 0.07, 12.0)   # ordinary mic noise afterwards
+    assert tm.state == "latched"
+    assert events == ["start", "cancel", "start"]
+
+def test_loud_key_thump_right_after_latching_is_not_speech():
+    # A desk-mounted mic hears the Right Ctrl double-tap itself: a 0.45 s burst well above
+    # the noise floor. It must not count as speech and arm the silence timer.
+    tm, clock, events = real()
+    latch(tm, clock)
+    feed(tm, clock, 0.5, 0.45)    # the thump of the key
+    feed(tm, clock, 0.04, 10.0)   # then the user says nothing
+    assert tm.state == "latched"
+    assert events == ["start", "cancel", "start"]
+
+
+def test_speech_right_after_the_settle_window_is_still_detected():
+    tm, clock, events = real()
+    latch(tm, clock)
+    feed(tm, clock, 0.04, 0.8)
+    talk(tm, clock, 2.0)
+    feed(tm, clock, 0.04, 5.0)
+    assert events == ["start", "cancel", "start", "stop"]

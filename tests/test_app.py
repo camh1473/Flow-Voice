@@ -86,6 +86,13 @@ class Clock:
 AUDIO = np.ones(8000, dtype=np.float32)
 
 
+def speak(app, clock, seconds=1.5, level=0.5, step=0.05):
+    """Sustained speech-like input: TalkMode ignores the first 0.6 s of a take (key thump)
+    and needs ~0.25 s of voice after that to count speech as heard."""
+    for _ in range(int(round(seconds / step))):
+        app.on_level(level)
+        clock.t += step
+
 def make(engine=None, audio=AUDIO, selection="read me", config=None, history=None,
          clock=None, app_name="notepad.exe"):
     pasted, ui, spk = [], FakeUi(), FakeSpeaker()
@@ -181,7 +188,7 @@ def test_double_tap_cycle_pastes_once():
     clock.t += 0.2
     app.press(); clock.t += 0.1; app.release()
     assert app.talk.state == "latched" and ui.states[-1] == "recording"
-    app.on_level(0.5)
+    speak(app, clock)
     clock.t += 3.0
     app.click(); app.dictation.join()
     assert pasted == ["Hello"]
@@ -202,7 +209,7 @@ def test_silence_stop_pastes():
     clock = Clock()
     app, pasted, ui, _ = make(clock=clock)
     app.click()
-    app.on_level(0.5)
+    speak(app, clock)
     clock.t += 5.0
     app.tick(); app.dictation.join()
     assert pasted == ["Hello"] and app.talk.state == "idle"
@@ -300,7 +307,7 @@ def test_apply_config_updates_silence_and_phrases_live():
     assert app.config is new
     assert app.talk.silence_stop_seconds == 1.0 and app.talk.hands_free is False
     app.click()
-    app.on_level(0.5)
+    speak(app, clock)
     clock.t += 1.5
     app.tick(); app.dictation.join()
     assert pasted == ["Keep this."]
@@ -314,8 +321,8 @@ def test_on_level_forwards_to_ui_and_talk():
     clock.t += 5.0
     app.tick()
     assert app.talk.state == "latched"  # no speech heard yet: never silence-stops
-    app.on_level(0.5)
-    assert ui.levels == [0.5]
+    speak(app, clock)
+    assert ui.levels and set(ui.levels) == {0.5}  # every chunk reaches the UI
     clock.t += 5.0
     app.tick(); app.dictation.join()
     assert app.talk.state == "idle" and pasted == ["Hello"]

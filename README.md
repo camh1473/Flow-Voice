@@ -7,7 +7,7 @@ Double-click `run.bat`. The first launch downloads the ~500 MB `small.en` speech
 
 ## Dictate
 - **Hold to talk:** hold **Right Ctrl**, speak, release. The text is pasted where your cursor is.
-- **Hands-free:** double-tap **Right Ctrl** (two quick taps) to latch recording on, or click the pill. Talk as long as you like, up to 5 minutes. Recording ends when you press Right Ctrl again, click the pill again, or stop talking for the set number of seconds (default 4; it only counts after you have started speaking). A hands-free take in which you never spoke is discarded, not transcribed.
+- **Hands-free:** double-tap **Right Ctrl** (two quick taps) to latch recording on, or click the pill. Talk as long as you like, up to 5 minutes. Recording ends when you press Right Ctrl again, click the pill again, or stop talking for the set number of seconds (default 4; it only counts after you have started speaking). Speech is judged against your room's background noise, and the first half second of a take is ignored so the thump of the double-tap itself never counts as speech. A hands-free take in which you never spoke is discarded, not transcribed.
 - **Esc** cancels the take; nothing is pasted. Pressing any other key while holding Right Ctrl also cancels.
 - A single quick tap of Right Ctrl does nothing.
 

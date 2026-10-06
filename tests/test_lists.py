@@ -20,7 +20,7 @@ STORE = "Going to the store for:\n1. Apples\n2. Bananas\n3. Oranges"
     ("number one call Sam number two send the plans", "1. Call Sam\n2. Send the plans"),
     ("Number one, call Sam. Number two, send the plans.", "1. Call Sam\n2. Send the plans"),
     ("First, wake up. Second, make coffee. Third, ship it.", "1. Wake up\n2. Make coffee\n3. Ship it"),
-    ("First wake up. Second make coffee.", "1. Wake up\n2. Make coffee"),
+    ("First: plan. Second: build.", "1. Plan\n2. Build"),
     ("My plan: firstly, rest; secondly, eat.", "My plan:\n1. Rest\n2. Eat"),
     ("Pick up 1. milk 2. eggs. Then call Sam.", "Pick up:\n1. Milk\n2. Eggs\n\nThen call Sam."),
     ("Todo 1) milk 2) eggs then 3) bread", "Todo:\n1. Milk\n2. Eggs\n3. Bread"),
@@ -78,6 +78,13 @@ def test_numbered_lists(text, expected):
     "Our number one goal, their number two goal.",
     "I woke up at 1. Then at 2. Then I gave up.",
     "It ended at 1. But at 2. So what.",
+    # Final review C1: an ordinal counts only with a comma or colon after it.
+    "First wake up. Second make coffee.",
+    "First time home buyers get the credit. Second home buyers do not.",
+    "First floor is the primary suite. Second floor has three bedrooms.",
+    "First thing in the morning I call the lender. Second time this week he missed it.",
+    "First come first served. Second place is fine.",
+    "First line\nsecond line",
 ])
 def test_unchanged(text):
     assert format_lists(text) == text
@@ -100,6 +107,11 @@ def test_placeholder_only_numbered_items():
 
 def test_placeholder_is_never_a_marker():
     text = f"Send {ph(1)}. apples {ph(2)}. pears"
+    assert format_lists(text) == text
+
+
+def test_comma_less_ordinals_with_placeholder_unchanged():
+    text = f"First line\nsecond line {ph(0)}"
     assert format_lists(text) == text
 
 

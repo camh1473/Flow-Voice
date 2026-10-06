@@ -26,7 +26,7 @@ _DETERMINER = re.compile(r"(?<!\w)(?:my|our|your|his|her|their|its|the|a|an)\s+$
 _SENTENCE_GLUE = re.compile(r"\s+(?:Then|And|But|So)(?!\w)")
 _ABBREVIATION = re.compile(r"(?<![\w.])(?:mrs|mr|ms|dr|st|jr|sr|vs|etc|e\.g|i\.e)$", re.IGNORECASE)
 _ORDINAL_MARKER = re.compile(
-    r"(?<!\w)(?P<o>" + "|".join(sorted(_ORDINALS, key=len, reverse=True)) + r")(?!\w)(?!\s+of\s+all\b)(?P<p>[,:])?",
+    r"(?<!\w)(?P<o>" + "|".join(sorted(_ORDINALS, key=len, reverse=True)) + r")(?!\w)(?!\s+of\s+all\b)(?P<p>[,:])",
     re.IGNORECASE,
 )
 _MARKUP = re.compile(r"(?m)^[ \t]*- |\n[ \t]*\d+\. ")
@@ -106,10 +106,10 @@ def _number_markers(text: str) -> list[Marker]:
 
 
 def _ordinal_markers(text: str) -> list[Marker]:
+    """Ordinals count only when set off by a comma or colon ('First, ...', 'Second: ...')."""
     return [
         Marker(m.start(), m.end(), _ORDINALS[m.group("o").lower()], "ordinal")
         for m in _ORDINAL_MARKER.finditer(text)
-        if m.group("p") or _SENTENCE_START.search(text[:m.start()])
     ]
 
 

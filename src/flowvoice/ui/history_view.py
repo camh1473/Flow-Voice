@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from flowvoice.history import History, HistoryEntry
+from flowvoice.ui import theme
 from flowvoice.ui.home_view import format_meta
 
 MSG_OFF = "History is off"
@@ -26,8 +27,6 @@ MSG_NO_MATCH = "No matches"
 MSG_ERROR = "History unavailable"
 CLEAR_PROMPT = "Delete all history? This cannot be undone."
 ENTRY_ROLE = Qt.UserRole
-ROW_GAP = 10  # matches the bottom margin of #HistoryList::item in theme.py
-ROW_SIDE_GAP = 4  # right margin of the item, which the widget overlaps
 
 
 def default_confirm(message: str) -> bool:
@@ -36,12 +35,12 @@ def default_confirm(message: str) -> bool:
     return answer == QMessageBox.Yes
 
 
-def _row_widget(entry: HistoryEntry) -> QFrame:
+def _row_widget(entry: HistoryEntry, side_gap: int) -> QFrame:
     row = QFrame()
     row.setObjectName("HistoryRowBody")
     row.setAttribute(Qt.WA_TransparentForMouseEvents)
     layout = QVBoxLayout(row)
-    layout.setContentsMargins(16, 12, 16 + ROW_SIDE_GAP, 12)
+    layout.setContentsMargins(16, 12, 16 + side_gap, 12)
     layout.setSpacing(4)
     meta = QLabel(format_meta(entry))
     meta.setObjectName("Secondary")
@@ -63,6 +62,7 @@ class HistoryView(QWidget):
         self._history = history
         self._confirm = confirm
         self._query = ""
+        self._gaps = theme.history_gaps(1.0)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(36, 30, 36, 24)
@@ -106,6 +106,20 @@ class HistoryView(QWidget):
 
         self.refresh()
 
+    @property
+    def gaps(self) -> tuple[int, int]:
+        """(bottom, right) card margins currently reserved in row size hints."""
+        return self._gaps
+
+    def set_scale(self, scale: float) -> None:
+        """Follow the UI size: recompute the card gaps and re-fit every row."""
+        self._gaps = theme.history_gaps(scale)
+        for i in range(self.list.count()):
+            body = self.list.itemWidget(self.list.item(i))
+            if body is not None:
+                body.layout().setContentsMargins(16, 12, 16 + self._gaps[1], 12)
+        self._fit_rows()
+
     def row_count(self) -> int:
         return self.list.count()
 
@@ -146,7 +160,7 @@ class HistoryView(QWidget):
             self.list.addItem(item)
         else:
             self.list.insertItem(index, item)
-        self.list.setItemWidget(item, _row_widget(entry))
+        self.list.setItemWidget(item, _row_widget(entry, self._gaps[1]))
         self._fit(item)
 
     def _fit(self, item: QListWidgetItem) -> None:
@@ -154,7 +168,7 @@ class HistoryView(QWidget):
         if widget is None:
             return
         width = max(1, self.list.viewport().width())
-        item.setSizeHint(QSize(width, widget.heightForWidth(width) + ROW_GAP))
+        item.setSizeHint(QSize(width, widget.heightForWidth(width) + self._gaps[0]))
 
     def _fit_rows(self) -> None:
         for i in range(self.list.count()):
@@ -208,6 +222,8 @@ class HistoryView(QWidget):
             self._show_message(MSG_ERROR)
             return
         self.refresh()
+
+
 
 
 

@@ -65,6 +65,20 @@ FONT_SIZES = {
 }
 
 
+HISTORY_GAP = 10  # bottom margin between history cards
+HISTORY_SIDE_GAP = 4  # right margin of a history card
+
+
+def scaled_px(value: float, scale: float) -> int:
+    """Pixel value under the UI scale; the single rounding rule used by the stylesheet."""
+    return max(1, round(value * scale))
+
+
+def history_gaps(scale: float) -> tuple[int, int]:
+    """(bottom, right) card margins in px at `scale`, shared by the QSS and HistoryView."""
+    return scaled_px(HISTORY_GAP, scale), scaled_px(HISTORY_SIDE_GAP, scale)
+
+
 def is_dark(app: QApplication) -> bool:
     """True when the application's window color is dark."""
     return app.palette().color(QPalette.Window).lightness() < 128
@@ -80,7 +94,7 @@ def stylesheet(dark: bool, scale: float) -> str:
     f = {k: round(v * scale, 1) for k, v in FONT_SIZES.items()}
 
     def px(value: float) -> str:
-        return f"{max(1, round(value * scale))}px"
+        return f"{scaled_px(value, scale)}px"
 
     dot = px(12)
     return f"""
@@ -227,7 +241,7 @@ QListWidget, QTableWidget, QTreeWidget {{
     background: {c["card"]};
     border: 1px solid {c["card_border"]};
     border-radius: 12px;
-    margin: 0 {px(4)} {px(10)} 0;
+    margin: 0 {px(HISTORY_SIDE_GAP)} {px(HISTORY_GAP)} 0;
 }}
 #HistoryList::item:selected {{ background: {c["select"]}; border: 1px solid {c["accent"]}; }}
 #HistoryRowBody {{ background: transparent; }}
@@ -257,4 +271,5 @@ QToolTip {{
     padding: 4px 8px;
 }}
 """
+
 

@@ -156,6 +156,12 @@ class MainWindow(QMainWindow):
         self.sidebar_frame.setFixedWidth(round(SIDEBAR_WIDTH * scale))
         self.sidebar.setIconSize(QSize(round(ICON_PX * scale), round(ICON_PX * scale)))
         self._refresh_icons()
+        self._scale_history()
+
+    def _scale_history(self) -> None:
+        setter = getattr(self.history_view, "set_scale", None)
+        if setter is not None:
+            setter(self._scale)
 
     def set_dark(self, dark: bool) -> None:
         self._dark = dark
@@ -167,6 +173,7 @@ class MainWindow(QMainWindow):
     def set_history_view(self, widget: QWidget) -> None:
         self._replace_page(self.history_view, widget)
         self.history_view = widget
+        self._scale_history()
 
     def set_settings_view(self, widget: QWidget) -> None:
         self._replace_page(self.settings_view, widget)

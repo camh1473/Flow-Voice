@@ -84,7 +84,7 @@ def render_home(dark: bool, state: str = "idle") -> QImage:
     return image
 
 
-def render_history(dark: bool) -> QImage:
+def render_history(dark: bool, scale: float = 1.0) -> QImage:
     """The main window on the History tab with sample rows (one wrapping, one multi-line)."""
     tmp = Path(tempfile.mkdtemp())
     hist = History(tmp / "history.db")
@@ -100,7 +100,7 @@ def render_history(dark: bool) -> QImage:
         hist.add(raw, clean, app)
     settings = QSettings(str(Path(tempfile.gettempdir()) / "flowvoice-preview.ini"),
                          QSettings.IniFormat)
-    win = MainWindow(Config(), hist, lambda cfg: None, settings=settings, dark=dark)
+    win = MainWindow(Config(ui_scale=scale), hist, lambda cfg: None, settings=settings, dark=dark)
     win.resize(880, 620)
     win.show_page("History")
     win.show()
@@ -128,6 +128,9 @@ def main() -> None:
         path = OUT / f"history_{name}.png"
         render_history(dark).save(str(path))
         print(path)
+    path = OUT / "history_light_1p5.png"
+    render_history(False, 1.5).save(str(path))
+    print(path)
     path = OUT / "home_recording.png"
     render_home(False, "recording").save(str(path))
     print(path)
@@ -136,4 +139,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
 

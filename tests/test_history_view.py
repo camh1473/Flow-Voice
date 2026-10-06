@@ -101,3 +101,39 @@ def test_db_error_shows_inline_message(qapp, hist):
     view.refresh()
     assert view.message.text() == "History unavailable"
     assert view.row_count() == 0
+
+
+def _long_view(hist):
+    hist.add("long", "word " * 80, "x.exe")
+    view = _view(hist)
+    view.resize(520, 600)
+    view.show()
+    from PySide6.QtWidgets import QApplication
+    QApplication.processEvents()
+    return view
+
+
+@pytest.mark.parametrize("scale", [1.0, 1.5])
+def test_set_scale_reserves_scaled_gap(qapp, hist, scale):
+    from flowvoice.ui import theme
+    view = _long_view(hist)
+    view.set_scale(scale)
+    item = view.list.item(0)
+    body = view.list.itemWidget(item)
+    width = view.list.viewport().width()
+    bottom, _side = theme.history_gaps(scale)
+    assert item.sizeHint().height() >= body.heightForWidth(width) + bottom
+    assert view.gaps == theme.history_gaps(scale)
+
+
+def test_main_window_scale_propagates_to_history(qapp, tmp_path):
+    from flowvoice.config import Config
+    from flowvoice.ui import theme
+    from flowvoice.ui.main_window import MainWindow
+    from PySide6.QtCore import QSettings
+    win = MainWindow(Config(), History(tmp_path / "w.db"), lambda c: None,
+                     settings=QSettings(str(tmp_path / "s.ini"), QSettings.IniFormat), dark=False)
+    win.apply_scale(1.5)
+    assert win.history_view.gaps == theme.history_gaps(1.5)
+    win.request_quit()
+    win.close()

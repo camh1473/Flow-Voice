@@ -17,7 +17,7 @@ from PySide6.QtGui import QColor, QImage, QPainter  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from flowvoice.config import Config  # noqa: E402
-from flowvoice.history import HistoryEntry  # noqa: E402
+from flowvoice.history import History, HistoryEntry  # noqa: E402
 from flowvoice.ui.main_window import MainWindow  # noqa: E402
 from flowvoice.ui.pill import PillWidget  # noqa: E402
 
@@ -84,6 +84,35 @@ def render_home(dark: bool, state: str = "idle") -> QImage:
     return image
 
 
+def render_history(dark: bool) -> QImage:
+    """The main window on the History tab with sample rows (one wrapping, one multi-line)."""
+    tmp = Path(tempfile.mkdtemp())
+    hist = History(tmp / "history.db")
+    for raw, clean, app in (
+        ("pick up the keys", "Pick up the keys from the model home before 5.", "notepad.exe"),
+        ("thanks for the update", "Thanks for the update. I will review the plan tonight.", "chrome.exe"),
+        ("agenda", "Agenda for Monday:\n- Review inventory pricing\n- Update the spec sheets\n- Call the lender", "onenote.exe"),
+        ("long", "Hey Sam, just confirming we are still on for Thursday at 2. I will bring the floor "
+                 "plans, the updated price sheet, and the revised options list so we can walk through "
+                 "every change before the buyers arrive.", "OUTLOOK.EXE"),
+        ("hello", "Hello, this is a quick test.", "Code.exe"),
+    ):
+        hist.add(raw, clean, app)
+    settings = QSettings(str(Path(tempfile.gettempdir()) / "flowvoice-preview.ini"),
+                         QSettings.IniFormat)
+    win = MainWindow(Config(), hist, lambda cfg: None, settings=settings, dark=dark)
+    win.resize(880, 620)
+    win.show_page("History")
+    win.show()
+    QApplication.processEvents()
+    win.history_view.list.setCurrentRow(1)
+    QApplication.processEvents()
+    image = win.grab().toImage()
+    win.request_quit()
+    win.close()
+    return image
+
+
 def main() -> None:
     app = QApplication.instance() or QApplication([])
     OUT.mkdir(parents=True, exist_ok=True)
@@ -95,6 +124,10 @@ def main() -> None:
         path = OUT / f"home_{name}.png"
         render_home(dark).save(str(path))
         print(path)
+    for name, dark in (("light", False), ("dark", True)):
+        path = OUT / f"history_{name}.png"
+        render_history(dark).save(str(path))
+        print(path)
     path = OUT / "home_recording.png"
     render_home(False, "recording").save(str(path))
     print(path)
@@ -103,3 +136,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

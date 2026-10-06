@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 from flowvoice.config import Config
 from flowvoice.history import History
 from flowvoice.ui import theme
+from flowvoice.ui.history_view import HistoryView
 from flowvoice.ui.home_view import HomeView
 
 PAGES = ("Home", "History", "Settings")
@@ -132,7 +133,7 @@ class MainWindow(QMainWindow):
         self.pages = QStackedWidget()
         self.home = HomeView()
         self.home.hint(hint_text(config))
-        self.history_view: QWidget = placeholder("History")
+        self.history_view: QWidget = HistoryView(history)
         self.settings_view: QWidget = placeholder("Settings")
         for page in (self.home, self.history_view, self.settings_view):
             self.pages.addWidget(page)
@@ -187,6 +188,8 @@ class MainWindow(QMainWindow):
         self.hide()
 
     def _replace_page(self, old: QWidget, new: QWidget) -> None:
+        if new is old:
+            return
         index = self.pages.indexOf(old)
         current = self.pages.currentIndex() == index
         self.pages.removeWidget(old)
@@ -215,3 +218,4 @@ class MainWindow(QMainWindow):
             icon.addPixmap(_glyph_pixmap(family, GLYPHS[name], colors["accent"], px, ratio), QIcon.Normal)
             icon.addPixmap(_glyph_pixmap(family, GLYPHS[name], "#ffffff", px, ratio), QIcon.Selected)
             self.sidebar.item(i).setIcon(icon)
+

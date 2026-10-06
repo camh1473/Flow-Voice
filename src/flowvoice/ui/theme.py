@@ -26,6 +26,7 @@ LIGHT = {
     "destructive": "#ff3b30",
     "destructive_hover": "#e6352b",
     "scroll": "rgba(0, 0, 0, 0.22)",
+    "select": "#eaf3ff",
 }
 
 DARK = {
@@ -48,6 +49,7 @@ DARK = {
     "destructive": "#ff453a",
     "destructive_hover": "#ff5f55",
     "scroll": "rgba(255, 255, 255, 0.25)",
+    "select": "#1f3552",
 }
 
 FONT_SIZES = {
@@ -220,6 +222,15 @@ QListWidget, QTableWidget, QTreeWidget {{
     border-radius: 12px;
     outline: 0;
 }}
+#HistoryList {{ background: transparent; border: none; }}
+#HistoryList::item {{
+    background: {c["card"]};
+    border: 1px solid {c["card_border"]};
+    border-radius: 12px;
+    margin: 0 {px(4)} {px(10)} 0;
+}}
+#HistoryList::item:selected {{ background: {c["select"]}; border: 1px solid {c["accent"]}; }}
+#HistoryRowBody {{ background: transparent; }}
 QHeaderView::section {{
     background: transparent;
     border: none;
@@ -246,3 +257,4 @@ QToolTip {{
     padding: 4px 8px;
 }}
 """
+

@@ -1,18 +1,21 @@
 """Optional local-AI polish: prompt, strict output checks and the AiService that owns status."""
 import dataclasses
+import difflib
 import re
 import threading
 import time
 from collections import Counter
 from collections.abc import Callable
 
-from flowvoice.ai import AiError, OllamaClient, ensure_running
+from flowvoice.ai import AiEmptyReply, AiError, OllamaClient, ensure_running
 from flowvoice.config import Config
 
 OFF, WARMING, READY, MISSING, UNAVAILABLE = "off", "warming", "ready", "missing model", "unavailable"
 WARMUP_TIMEOUT = 90.0  # a cold model load takes up to ~30 s; the per-dictation timeout would fail it
 MIN_RECALL, MAX_NEW = 0.85, 0.15
 LENGTH_RANGE = (0.7, 1.5)
+MIN_ORDER = 0.9
+PREFIX_WORDS = 4
 
 _UNREACHABLE = "Could not reach the local AI server"
 _TIMED_OUT = "Local AI timed out"
@@ -72,13 +75,21 @@ _PUA = re.compile("[" + chr(0xE000) + "-" + chr(0xF8FF) + "]")
 _WORD = re.compile(r"\w+")
 _MARKER = re.compile(r"(?m)^[ \t]*(?:[-*]|\d+[.)])[ \t]+")
 _LIST_MARKUP = re.compile(r"(?m)^[ \t]*(?:- |\d+\. )")
-_APOS = "['" + chr(0x2019) + "]"
-_OPEN_QUOTES = "\"'" + chr(0x201C) + chr(0x2018)
-_PREAMBLE = re.compile(
-    r"^[\s" + _OPEN_QUOTES + r"]*(?:(?:sure|okay|ok|certainly|absolutely|of\s+course|here|here"
-    + _APOS + r"s)\s*[,:!.]|here\s+(?:is|are)\b|here" + _APOS + r"s\b)",
-    re.IGNORECASE,
-)
+_APOSTROPHES = str.maketrans({chr(0x2018): "'", chr(0x2019): "'"})
+_TOKEN = re.compile(r"[$]?\d[\d,.:]*|[A-Za-z]+(?:'[A-Za-z]+)*")
+_NUMBER_WORDS = frozenset(
+    "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen "
+    "sixteen seventeen eighteen nineteen twenty thirty forty fifty sixty seventy eighty ninety "
+    "hundred thousand million billion half".split())
+_NEGATIONS = frozenset("not no never cannot none nothing nobody neither nor without".split())
+_CALENDAR = frozenset(
+    "monday tuesday wednesday thursday friday saturday sunday january february march april may "
+    "june july august september october november december".split())
+_CALENDAR_ABBREVIATIONS = frozenset(
+    "mon tue tues wed thu thur thurs fri sat sun jan feb mar apr jun jul aug sep sept oct nov dec".split())
+_SENTENCE_LEAD = " \t\"'([" + chr(0x201C)
+_MARKDOWN = (re.compile(r"\*\*"), re.compile(r"__"), re.compile("`"), re.compile(r"(?m)^[ \t]*[#>]"))
+_SENTENCE_SPLIT = re.compile(r"[.!?\n]+")
 _THINK = re.compile(r"^\s*<think>.*?</think>", re.IGNORECASE | re.DOTALL)
 _FENCE = re.compile(r"^```[\w.+-]*[ \t]*\n(.*?)\n?```$", re.DOTALL)
 _QUOTE_PAIRS = {'"': '"', "'": "'", chr(0x201C): chr(0x201D), chr(0x2018): chr(0x2019)}
@@ -113,16 +124,78 @@ def _echoes_prompt(text: str) -> bool:
     return any(p in flat for p in _PROMPT_PHRASES)
 
 
+def _prep(text: str) -> str:
+    """Straight apostrophes, no line-start list markers, placeholders as spaces."""
+    return _PUA.sub(" ", _MARKER.sub("", text.translate(_APOSTROPHES)))
+
+
+def _token(raw: str) -> str:
+    return raw.rstrip(".,:") if raw[0] in "$0123456789" else raw.lower()
+
+
+def _tokens(text: str) -> list[str]:
+    """Lowercase words and numbers ("can't" and "$1,200" stay whole), no markers or punctuation."""
+    return [_token(m.group()) for m in _TOKEN.finditer(_prep(text))]
+
+
+def _facts(text: str) -> Counter:
+    """Numbers, number words, negations, weekdays and months: these must survive exactly."""
+    out: Counter = Counter()
+    for m in _TOKEN.finditer(_prep(text)):
+        raw = m.group()
+        tok = _token(raw)
+        if raw[0] in "$0123456789":
+            out[tok] += 1
+        elif tok.endswith("n't"):
+            out["n't"] += 1
+        elif tok in _NUMBER_WORDS or tok in _NEGATIONS or tok in _CALENDAR:
+            out[tok] += 1
+        elif raw[0].isupper() and tok in _CALENDAR_ABBREVIATIONS:
+            out[tok] += 1
+    return out
+
+
+def _proper_nouns(text: str) -> Counter:
+    """Capitalised words that do not start a sentence or line (and are not "I")."""
+    prepped = _prep(text)
+    out: Counter = Counter()
+    for m in _TOKEN.finditer(prepped):
+        raw = m.group()
+        tok = raw.lower()
+        if not raw[0].isupper() or tok == "i" or tok.startswith("i'"):
+            continue
+        before = prepped[:m.start()].rstrip(_SENTENCE_LEAD)
+        if before and before[-1] not in ".!?\n":
+            out[tok] += 1
+    return out
+
+
+def _occurrences(seq: list[str], sub: list[str]) -> int:
+    n = len(sub)
+    return sum(1 for i in range(len(seq) - n + 1) if seq[i:i + n] == sub)
+
+
+def _repeats_sentence(original: str, candidate: str) -> bool:
+    orig, cand = _words(original), _words(candidate)
+    for sentence in _SENTENCE_SPLIT.split(candidate):
+        words = _words(sentence)
+        if len(words) >= 4:
+            seen = _occurrences(cand, words)
+            if seen >= 2 and seen > _occurrences(orig, words):
+                return True
+    return False
+
+
 def rejection_reason(original: str, candidate: str) -> str | None:
     """Why `candidate` may not replace `original`, or None when it is acceptable."""
     if not isinstance(candidate, str) or not candidate.strip():
         return "rejected: empty output"
     if Counter(_PUA.findall(original)) != Counter(_PUA.findall(candidate)):
         return "rejected: lost snippet placeholder"
-    if _PREAMBLE.match(candidate) and not _PREAMBLE.match(original):
-        return "rejected: added a preamble"
     if _echoes_prompt(candidate) and not _echoes_prompt(original):
         return "rejected: repeated its instructions"
+    if any(p.search(candidate) and not p.search(original) for p in _MARKDOWN):
+        return "rejected: added formatting"
     orig, cand = Counter(_words(original)), Counter(_words(candidate))
     total_o, total_c = sum(orig.values()), sum(cand.values())
     kept = sum((orig & cand).values())
@@ -134,11 +207,25 @@ def rejection_reason(original: str, candidate: str) -> str | None:
     n_orig, n_cand = len(_flat(original)), len(_flat(candidate))
     if not n_orig or not lo * n_orig <= n_cand <= hi * n_orig:
         return "rejected: length changed"
+    o_tokens, c_tokens = _tokens(original), _tokens(candidate)
+    k = min(PREFIX_WORDS, len(o_tokens))
+    if c_tokens[:k] != o_tokens[:k] or c_tokens[-1:] != o_tokens[-1:]:
+        return "rejected: changed the start or end"
+    if _facts(original) != _facts(candidate):
+        return "rejected: changed a number, date or negation"
+    present = Counter(c_tokens)
+    if any(present[name] < n for name, n in _proper_nouns(original).items()):
+        return "rejected: dropped a name"
+    ratio = difflib.SequenceMatcher(None, _words(original), _words(candidate), autojunk=False).ratio()
+    if ratio < MIN_ORDER:
+        return "rejected: reordered words"
+    if _repeats_sentence(original, candidate):
+        return "rejected: repeated a sentence"
     return None
 
 
 def ai_acceptable(original: str, candidate: str) -> bool:
-    """True only if the AI kept the words, placeholders and length of the original."""
+    """True only if the AI kept the words, facts, names, order, placeholders and length."""
     return rejection_reason(original, candidate) is None
 
 
@@ -254,7 +341,10 @@ class AiService:
             if not self._current(gen):
                 return
             loader = self._client_factory(dataclasses.replace(cfg, ai_timeout_seconds=WARMUP_TIMEOUT))
-            loader.chat("Reply with OK.", "OK", max_tokens=1)
+            try:
+                loader.chat("Reply with OK.", "OK", max_tokens=4)
+            except AiEmptyReply:
+                pass  # the model loaded and answered; an empty first token is normal
             self._finish(gen, READY, "")
         except AiError as e:
             self._finish(gen, UNAVAILABLE, _short(e))
@@ -278,6 +368,9 @@ class AiService:
             reason = rejection_reason(text, result)
             self._note(reason or "accepted")
             return None if reason else result
+        except AiEmptyReply:
+            self._note("rejected: empty output")
+            return None
         except AiError as e:
             msg = _short(e)
             if msg == _TIMED_OUT:

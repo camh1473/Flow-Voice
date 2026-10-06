@@ -19,6 +19,10 @@ class AiError(Exception):
     """Any failure talking to the local model; the message is short and safe to show."""
 
 
+class AiEmptyReply(AiError):
+    """The model answered, but with empty or whitespace-only content."""
+
+
 def is_loopback(url: str) -> bool:
     """True only for http(s) URLs whose host is localhost, 127.0.0.1 or ::1."""
     try:
@@ -114,8 +118,10 @@ class OllamaClient:
         data = self._json("/api/chat", body, self.timeout)
         message = data.get("message") if isinstance(data, dict) else None
         content = message.get("content") if isinstance(message, dict) else None
-        if not isinstance(content, str) or not content.strip():
+        if not isinstance(content, str):
             raise AiError("Local AI returned an empty reply")
+        if not content.strip():
+            raise AiEmptyReply("Local AI returned an empty reply")
         return content
 
     def _list(self, timeout: float) -> list[str]:

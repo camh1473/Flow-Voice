@@ -173,6 +173,23 @@ def test_chat_bad_content(server, payload):
         OllamaClient(server.url, "m").chat("S", "U")
 
 
+@pytest.mark.parametrize("text", ["", "  \n "])
+def test_chat_empty_content_is_empty_reply(server, text):
+    server.routes[("POST", "/api/chat")] = _chat_ok(text)
+    with pytest.raises(ai.AiEmptyReply) as exc:
+        OllamaClient(server.url, "m").chat("S", "U")
+    assert isinstance(exc.value, AiError)
+    assert str(exc.value) == "Local AI returned an empty reply"
+
+
+@pytest.mark.parametrize("payload", [{"message": {"content": None}}, {"message": {}}, {}, []])
+def test_chat_malformed_content_is_not_empty_reply(server, payload):
+    server.routes[("POST", "/api/chat")] = lambda req: (200, payload, None)
+    with pytest.raises(AiError) as exc:
+        OllamaClient(server.url, "m").chat("S", "U")
+    assert not isinstance(exc.value, ai.AiEmptyReply)
+
+
 def test_chat_timeout(server):
     def slow(req):
         time.sleep(1.5)

@@ -101,3 +101,33 @@ def test_emit_from_thread_is_queued_to_main_thread(qapp, method, signal, slot, a
     thread, value = receiver.calls[0]
     assert thread is threading.main_thread()
     assert value is arg if method == "add_history" else value == arg
+
+
+def test_set_ai_status_emits(qapp):
+    ui = QtUi()
+    got = []
+    ui.ai_status_changed.connect(lambda status, detail: got.append((status, detail)))
+    ui.set_ai_status("missing model", "ollama pull x")
+    assert got == [("missing model", "ollama pull x")]
+
+
+class _PairReceiver(QObject):
+    def __init__(self):
+        super().__init__()
+        self.calls = []
+
+    @Slot(str, str)
+    def on_pair(self, status, detail):
+        self.calls.append((threading.current_thread(), status, detail))
+
+
+def test_set_ai_status_from_thread_is_queued_to_main_thread(qapp):
+    ui = QtUi()
+    receiver = _PairReceiver()
+    ui.ai_status_changed.connect(receiver.on_pair)
+    worker = threading.Thread(target=lambda: ui.set_ai_status("ready", ""))
+    worker.start()
+    worker.join()
+    assert receiver.calls == []
+    QCoreApplication.processEvents()
+    assert receiver.calls == [(threading.main_thread(), "ready", "")]

@@ -54,12 +54,13 @@ class Shell(QObject):
     Settable callbacks: `on_toggle` (pill click, Home Start/Stop, tray Start/Stop),
     `on_tick` (every 200 ms), `on_quit` (runs first on quit), `on_save_config` (Settings).
     Until the app sets `on_toggle`, a toggle says the model is still loading.
+    `ai_probe` (optional) goes to the Settings page; `ui.set_ai_status` reaches the window.
     """
 
     def __init__(self, config: Config, history: History | None, *,
                  settings: QSettings | None = None,
                  mics: list[tuple[str, int | None]] | None = None,
-                 dark: bool | None = None, first_run: bool = False) -> None:
+                 dark: bool | None = None, first_run: bool = False, ai_probe=None) -> None:
         self.qapp = QApplication.instance() or QApplication(sys.argv[:1])
         QApplication.setStyle("Fusion")
         self.qapp.setQuitOnLastWindowClosed(False)
@@ -74,7 +75,7 @@ class Shell(QObject):
         self.ui = QtUi()
         self.pill = PillWidget(config.ui_scale, config.pill_always_visible)
         self.window = MainWindow(config, history, self._save_config, settings=settings,
-                                 mics=mics, dark=dark)
+                                 mics=mics, dark=dark, ai_probe=ai_probe)
 
         self._menu = QMenu()
         self.open_action = QAction("Open", self._menu)
@@ -93,6 +94,7 @@ class Shell(QObject):
         self.ui.message.connect(self.notify)
         self.ui.entry_added.connect(self._on_entry)
         self.ui.window_requested.connect(self.show_page)
+        self.ui.ai_status_changed.connect(self.window.set_ai_status, Qt.QueuedConnection)
         self.pill.clicked.connect(self._toggle)
         self.window.home.toggle_clicked.connect(self._toggle)
         self.start_stop_action.triggered.connect(self._toggle)
@@ -291,8 +293,11 @@ def restart_process(*, shutdown: Callable[[], None], spawn: Callable[[], None],
 
 def apply_saved_config(old: Config, new: Config, *, save: Callable[[Config], None], app,
                        apply_ui: Callable[[Config], None], restart: Callable[[], None],
-                       notify: Callable[[str], None]) -> str:
-    """Settings save: persist, then restart or apply live. Returns 'restart', 'live' or 'failed'."""
+                       notify: Callable[[str], None], ai=None) -> str:
+    """Settings save: persist, then restart or apply live. Returns 'restart', 'live' or 'failed'.
+
+    The app configures `ai` itself; before the app is ready `ai` is configured directly.
+    """
     try:
         save(new)
     except Exception as e:
@@ -304,6 +309,8 @@ def apply_saved_config(old: Config, new: Config, *, save: Callable[[Config], Non
         return "restart"
     if app is not None:
         app.apply_config(new)
+    elif ai is not None:
+        ai.configure(new)
     apply_ui(new)
     notify("Settings saved")
     return "live"

@@ -3,7 +3,9 @@ import subprocess
 import sys
 import threading
 from types import SimpleNamespace
+from typing import Callable
 
+from flowvoice.ai_polish import MISSING, OFF, UNAVAILABLE, WARMING, AiService
 from flowvoice.app import App
 from flowvoice.autostart import set_autostart
 from flowvoice.config import ensure_config_file, load_config, save_config
@@ -37,6 +39,57 @@ def _unhook_all() -> None:
         pass
 
 
+def ai_toast(prev_status: str, status: str, detail: str, *, enabled: bool) -> str | None:
+    """The tray message for an AI status change, or None (only failures, only with AI on)."""
+    if not enabled or status == prev_status:
+        return None
+    if status == UNAVAILABLE:
+        return f"AI polish unavailable: {detail}"
+    if status == MISSING:
+        return f"AI model not installed. Run: {detail}"
+    return None
+
+
+def ai_status_handler(get_ui: Callable[[], object],
+                      is_enabled: Callable[[], bool]) -> Callable[[str, str], None]:
+    """AiService `on_status`: forward every status, toast a failure once.
+
+    AiService calls this from worker threads with its lock held, so it only emits Qt signals.
+    `warming` does not count as a change, so a failed retry does not toast again.
+    """
+    settled = [OFF]
+
+    def on_status(status: str, detail: str) -> None:
+        ui = get_ui()
+        ui.set_ai_status(status, detail)
+        if status == WARMING:
+            return
+        message = ai_toast(settled[0], status, detail, enabled=is_enabled())
+        settled[0] = status
+        if message:
+            ui.notify(message)
+
+    return on_status
+
+
+def make_ai_service(get_ui: Callable[[], object], is_enabled: Callable[[], bool],
+                    **kwargs) -> AiService:
+    return AiService(on_status=ai_status_handler(get_ui, is_enabled), **kwargs)
+
+
+class AiProbe:
+    """What Settings may ask of the AI service: list models and run a test. Never starts Ollama."""
+
+    def __init__(self, ai: AiService) -> None:
+        self._ai = ai
+
+    def list_models(self, cfg) -> list[str]:
+        return self._ai.list_models(cfg)
+
+    def test(self, cfg) -> str:
+        return self._ai.test(cfg)
+
+
 def main() -> int:
     cfg = load_config()
     first_run = ensure_config_file(cfg)
@@ -49,7 +102,10 @@ def main() -> int:
     hooks = HookGroup()
     state = SimpleNamespace(cfg=cfg, app=None, recorder=None, lock=threading.Lock())
 
-    shell = Shell(cfg, history, mics=mic_choices(), first_run=first_run)
+    # Quitting never stops Ollama (the user may run it for other things); AI threads are daemons.
+    ai = make_ai_service(lambda: shell.ui, lambda: state.cfg.ai_enabled)
+    shell = Shell(cfg, history, mics=mic_choices(), first_run=first_run, ai_probe=AiProbe(ai))
+    ai.configure(state.cfg)  # warm up alongside the speech model; a no-op with AI off
 
     def stop_input() -> None:
         hooks.close()
@@ -70,7 +126,7 @@ def main() -> int:
     def on_save(new) -> None:
         result = apply_saved_config(state.cfg, new, save=save_config, app=state.app,
                                     apply_ui=shell.apply_config, restart=restart,
-                                    notify=shell.ui.notify)
+                                    notify=shell.ui.notify, ai=ai)
         if result == "live":
             state.cfg = new
 
@@ -96,7 +152,7 @@ def main() -> int:
                     return
                 state.recorder = recorder
             app = App(state.cfg, engine=engine, recorder=recorder, speaker=Speaker(on_error=shell.ui.notify),
-                      ui=shell.ui, history=history)
+                      ui=shell.ui, history=history, ai=ai)
 
             def read_aloud() -> None:
                 threading.Thread(target=app.on_tts_trigger, daemon=True).start()

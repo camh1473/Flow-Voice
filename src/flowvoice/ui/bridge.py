@@ -13,6 +13,7 @@ class QtUi(QObject):
     message = Signal(str)
     entry_added = Signal(object)
     window_requested = Signal(str)
+    ai_status_changed = Signal(str, str)
 
     def set_state(self, state: State) -> None:
         self.state_changed.emit(state)
@@ -29,3 +30,7 @@ class QtUi(QObject):
     def show_window(self, page: str) -> None:
         """Ask the GUI thread to open the main window on `page` (Home, History, Settings)."""
         self.window_requested.emit(page)
+
+    def set_ai_status(self, status: str, detail: str) -> None:
+        """AI service status for Settings; only emits, so AiService may call it under its lock."""
+        self.ai_status_changed.emit(status, detail)

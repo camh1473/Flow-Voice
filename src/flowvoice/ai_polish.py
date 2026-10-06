@@ -16,6 +16,7 @@ MIN_RECALL, MAX_NEW = 0.85, 0.15
 LENGTH_RANGE = (0.7, 1.5)
 MIN_ORDER = 0.9
 PREFIX_WORDS = 4
+MAX_REPLY_TOKENS = 2048
 
 _UNREACHABLE = "Could not reach the local AI server"
 _TIMED_OUT = "Local AI timed out"
@@ -265,6 +266,11 @@ def clean_ai_output(raw: str) -> str:
     return text
 
 
+def _reply_tokens(words: int) -> int:
+    """Room for the whole reformatted text (about two tokens per word), capped at 2048."""
+    return min(MAX_REPLY_TOKENS, 2 * words + 64)
+
+
 def _short(err: BaseException) -> str:
     lines = str(err).strip().splitlines()
     return lines[0][:120] if lines else "Local AI error"
@@ -381,9 +387,11 @@ class AiService:
                 if self.status != READY or self._key != (cfg.ai_model, cfg.ai_url):
                     return None
                 gen = self._gen
-            if count_words(text) < cfg.ai_min_words or has_list_markup(text):
+            words = count_words(text)
+            if words < cfg.ai_min_words or has_list_markup(text):
                 return None
-            raw = self._client_factory(cfg).chat(SYSTEM_PROMPT, text, examples=EXAMPLES)
+            raw = self._client_factory(cfg).chat(SYSTEM_PROMPT, text, examples=EXAMPLES,
+                                                 max_tokens=_reply_tokens(words))
             result = clean_ai_output(raw)
             reason = rejection_reason(text, result)
             self._note(reason or "accepted")

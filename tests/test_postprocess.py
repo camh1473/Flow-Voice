@@ -179,23 +179,24 @@ def test_ai_raising_keeps_rule_text():
     assert out == LINKEDIN + " please"
 
 
-def test_ai_skipped_over_1500_words():
+def test_ai_skipped_over_300_words():
+    assert postprocess.MAX_AI_WORDS == 300
     ai = FakeAi(result="x")
-    text = " ".join(f"w{i}" for i in range(1501))
+    text = " ".join(f"w{i}" for i in range(301))
     Postprocessor(ai).process(text, make_cfg(ai_enabled=True, snippets={}))
     assert ai.calls == []
 
 
-def test_ai_runs_at_1500_words():
+def test_ai_runs_at_300_words():
     ai = FakeAi(result=None)
-    text = " ".join(f"w{i}" for i in range(1500))
+    text = " ".join(f"w{i}" for i in range(300))
     Postprocessor(ai).process(text, make_cfg(ai_enabled=True, snippets={}))
     assert len(ai.calls) == 1
 
 
 def test_placeholders_do_not_count_toward_word_limit():
     ai = FakeAi(result=None)
-    text = " ".join(["my linkedin"] * 1500) + " end"
+    text = " ".join(["my linkedin"] * 300) + " end"
     Postprocessor(ai).process(text, make_cfg(ai_enabled=True))
     assert len(ai.calls) == 1
 

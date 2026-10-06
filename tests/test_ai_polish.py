@@ -305,6 +305,13 @@ def test_polish_returns_accepted_cleaned_result():
     assert (system, user, examples) == (SYSTEM_PROMPT, LONG, EXAMPLES)
 
 
+@pytest.mark.parametrize("n,expected", [(25, 114), (300, 664), (1200, 2048)])
+def test_polish_max_tokens_scales_with_words(n, expected):
+    h = ready_harness(FakeClient(reply=None))
+    h.svc.polish(" ".join(f"word{i}" for i in range(n)), on())
+    assert h.client.chats[-1][3] == expected
+
+
 def test_polish_below_threshold():
     h = ready_harness()
     n = len(h.client.chats)

@@ -6,7 +6,8 @@ from flowvoice.lists import format_lists
 from flowvoice.snippets import expand_snippets, protect_snippets
 from flowvoice.vocabulary import apply_dictionary, glossary_prompt
 
-MAX_AI_WORDS = 1500
+# Longer dictations skip the AI: the model must finish the whole reply within ai_timeout_seconds.
+MAX_AI_WORDS = 300
 
 
 def _safe(step, text: str) -> str:

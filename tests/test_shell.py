@@ -7,7 +7,13 @@ from PySide6.QtTest import QTest
 from flowvoice.config import Config
 from flowvoice.history import HistoryEntry
 from flowvoice.ui import shell as shell_mod
-from flowvoice.ui.shell import HookGroup, Shell, apply_saved_config, wire_capture
+from flowvoice.ui.shell import (
+    HookGroup,
+    Shell,
+    apply_saved_config,
+    restart_process,
+    wire_capture,
+)
 
 MICS = [("System default", None)]
 
@@ -57,9 +63,10 @@ def make_shell(qapp, tmp_path, monkeypatch):
     monkeypatch.setattr(shell_mod, "_quit_qt", lambda: None)
     made = []
 
-    def make(config=None, history=None):
+    def make(config=None, history=None, first_run=False):
         settings = QSettings(str(tmp_path / "window.ini"), QSettings.IniFormat)
-        s = Shell(config or Config(), history, settings=settings, mics=MICS, dark=False)
+        s = Shell(config or Config(), history, settings=settings, mics=MICS, dark=False,
+                  first_run=first_run)
         made.append(s)
         return s
 
@@ -122,9 +129,69 @@ def test_home_toggle_and_tray_start_stop_call_on_toggle(make_shell):
     assert calls == ["toggle", "toggle"]
 
 
-def test_toggle_without_callback_is_harmless(make_shell):
+def test_toggle_before_app_ready_notifies_still_loading(make_shell):
     s = make_shell()
+    shown = []
+    s.ui.message.connect(shown.append)
     s.window.home.toggle_clicked.emit()
+    s.start_stop_action.trigger()
+    assert shown == ["Still loading the speech model...", "Still loading the speech model..."]
+
+
+def test_first_run_shows_window(make_shell):
+    s = make_shell(first_run=True)
+    assert s.window.isVisible()
+
+
+def test_not_first_run_keeps_window_hidden(make_shell):
+    s = make_shell()
+    assert not s.window.isVisible()
+
+
+def test_show_window_request_from_worker_opens_settings_page(make_shell):
+    s = make_shell()
+    t = threading.Thread(target=s.ui.show_window, args=("Settings",))
+    t.start()
+    t.join()
+    QCoreApplication.processEvents()
+    assert s.window.isVisible()
+    assert s.window.pages.currentWidget() is s.window.settings_view
+
+
+def test_restart_process_order():
+    order = []
+    restart_process(shutdown=lambda: order.append("shutdown"),
+                    spawn=lambda: order.append("spawn"),
+                    exit=lambda: order.append("exit"),
+                    notify=lambda m: order.append(("notify", m)))
+    assert order == ["shutdown", "spawn", "exit"]
+
+
+def test_restart_process_exits_even_when_spawn_fails():
+    order = []
+
+    def spawn():
+        order.append("spawn")
+        raise OSError("no python")
+
+    def notify(m):
+        order.append(("notify", m))
+        raise RuntimeError("tray gone")
+
+    restart_process(shutdown=lambda: order.append("shutdown"), spawn=spawn,
+                    exit=lambda: order.append("exit"), notify=notify)
+    assert order == ["shutdown", "spawn", ("notify", "Restart failed: no python"), "exit"]
+
+
+def test_restart_process_exits_even_when_shutdown_fails():
+    order = []
+
+    def shutdown():
+        raise RuntimeError("boom")
+
+    restart_process(shutdown=shutdown, spawn=lambda: order.append("spawn"),
+                    exit=lambda: order.append("exit"), notify=lambda m: None)
+    assert order.count("exit") == 1 and order[-1] == "exit"
 
 
 def test_tray_menu_has_open_start_stop_quit(make_shell):

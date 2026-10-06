@@ -12,6 +12,7 @@ class QtUi(QObject):
     level_changed = Signal(float)
     message = Signal(str)
     entry_added = Signal(object)
+    window_requested = Signal(str)
 
     def set_state(self, state: State) -> None:
         self.state_changed.emit(state)
@@ -24,3 +25,7 @@ class QtUi(QObject):
 
     def add_history(self, entry: HistoryEntry) -> None:
         self.entry_added.emit(entry)
+
+    def show_window(self, page: str) -> None:
+        """Ask the GUI thread to open the main window on `page` (Home, History, Settings)."""
+        self.window_requested.emit(page)

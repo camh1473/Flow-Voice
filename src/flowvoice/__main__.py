@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 from flowvoice.app import App
 from flowvoice.autostart import set_autostart
+from flowvoice.config import default_path as config_path
 from flowvoice.config import load_config, save_config
 from flowvoice.history import History
 from flowvoice.hotkey import PushToTalk, Toggle
@@ -13,7 +14,13 @@ from flowvoice.recorder import Recorder
 from flowvoice.settings_logic import mic_choices
 from flowvoice.tts import Speaker
 from flowvoice.ui.hotkey_edit import pretty_key
-from flowvoice.ui.shell import HookGroup, Shell, apply_saved_config, wire_capture
+from flowvoice.ui.shell import (
+    HookGroup,
+    Shell,
+    apply_saved_config,
+    restart_process,
+    wire_capture,
+)
 
 
 def _open_history() -> History | None:
@@ -32,6 +39,7 @@ def _unhook_all() -> None:
 
 
 def main() -> int:
+    first_run = not config_path().exists()
     cfg = load_config()
     autostart_error = None
     try:
@@ -42,7 +50,7 @@ def main() -> int:
     hooks = HookGroup()
     state = SimpleNamespace(cfg=cfg, app=None, recorder=None, lock=threading.Lock())
 
-    shell = Shell(cfg, history, mics=mic_choices())
+    shell = Shell(cfg, history, mics=mic_choices(), first_run=first_run)
 
     def stop_input() -> None:
         hooks.close()
@@ -56,9 +64,9 @@ def main() -> int:
                 pass
 
     def restart() -> None:
-        shell.shutdown()
-        subprocess.Popen([sys.executable, "-m", "flowvoice"])
-        os._exit(0)
+        restart_process(shutdown=shell.shutdown,
+                        spawn=lambda: subprocess.Popen([sys.executable, "-m", "flowvoice"]),
+                        exit=lambda: os._exit(0), notify=shell.ui.notify)
 
     def on_save(new) -> None:
         result = apply_saved_config(state.cfg, new, save=save_config, app=state.app,
@@ -98,7 +106,9 @@ def main() -> int:
             hooks.set([PushToTalk(cfg.ptt_key, app.press, app.release, app.other_key),
                        Toggle(cfg.tts_key, read_aloud)])
         except Exception as e:
+            shell.on_toggle = lambda: shell.ui.notify("Startup failed - check Settings")
             shell.ui.notify(f"Startup failed: {e}")
+            shell.ui.show_window("Settings")
             return
         shell.on_toggle = app.click
         shell.on_tick = app.tick

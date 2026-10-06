@@ -53,18 +53,19 @@ class Shell(QObject):
 
     Settable callbacks: `on_toggle` (pill click, Home Start/Stop, tray Start/Stop),
     `on_tick` (every 200 ms), `on_quit` (runs first on quit), `on_save_config` (Settings).
+    Until the app sets `on_toggle`, a toggle says the model is still loading.
     """
 
     def __init__(self, config: Config, history: History | None, *,
                  settings: QSettings | None = None,
                  mics: list[tuple[str, int | None]] | None = None,
-                 dark: bool | None = None) -> None:
+                 dark: bool | None = None, first_run: bool = False) -> None:
         self.qapp = QApplication.instance() or QApplication(sys.argv[:1])
         QApplication.setStyle("Fusion")
         self.qapp.setQuitOnLastWindowClosed(False)
         super().__init__()
         self.config = config
-        self.on_toggle: Callable[[], None] | None = None
+        self.on_toggle: Callable[[], None] | None = self._not_ready
         self.on_tick: Callable[[], None] | None = None
         self.on_quit: Callable[[], None] | None = None
         self.on_save_config: Callable[[Config], None] | None = None
@@ -91,6 +92,7 @@ class Shell(QObject):
         self.ui.level_changed.connect(self.pill.set_level)
         self.ui.message.connect(self.notify)
         self.ui.entry_added.connect(self._on_entry)
+        self.ui.window_requested.connect(self.show_page)
         self.pill.clicked.connect(self._toggle)
         self.window.home.toggle_clicked.connect(self._toggle)
         self.start_stop_action.triggered.connect(self._toggle)
@@ -105,6 +107,8 @@ class Shell(QObject):
 
         if QSystemTrayIcon.isSystemTrayAvailable():
             self.tray.show()
+        if first_run:
+            self.open_window()
 
     def run(self) -> int:
         return self.qapp.exec()
@@ -125,6 +129,14 @@ class Shell(QObject):
         self.window.showNormal()
         self.window.raise_()
         self.window.activateWindow()
+
+    @Slot(str)
+    def show_page(self, page: str) -> None:
+        self.window.show_page(page)
+        self.open_window()
+
+    def _not_ready(self) -> None:
+        self.ui.notify("Still loading the speech model...")
 
     def shutdown(self) -> None:
         """Stop callbacks, run `on_quit`, save the window geometry and hide everything. Idempotent."""
@@ -257,6 +269,24 @@ def wire_capture(window: MainWindow, hooks: HookGroup, get_app: Callable[[], obj
 
     window.capture_started.connect(started)
     window.capture_finished.connect(hooks.resume)
+
+
+def restart_process(*, shutdown: Callable[[], None], spawn: Callable[[], None],
+                    exit: Callable[[], None], notify: Callable[[str], None]) -> None:
+    """Shut down, start the replacement process, then always exit (even if a step fails).
+
+    A failed shutdown skips the spawn so two instances never hook the keyboard at once.
+    """
+    try:
+        shutdown()
+        spawn()
+    except Exception as e:
+        try:
+            notify(f"Restart failed: {e}")
+        except Exception:
+            pass
+    finally:
+        exit()
 
 
 def apply_saved_config(old: Config, new: Config, *, save: Callable[[Config], None], app,

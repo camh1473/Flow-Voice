@@ -1,5 +1,6 @@
 import pytest
 from flowvoice.cleanup import clean
+from flowvoice.commands import DEFAULT_COMMANDS
 
 
 @pytest.mark.parametrize("raw,expected", [
@@ -42,9 +43,6 @@ def test_custom_backtrack_and_filler_lists():
     assert clean("Scratch that. Hi", backtracks=[]) == "Scratch that. Hi"
 
 
-from flowvoice.commands import DEFAULT_COMMANDS
-
-
 @pytest.mark.parametrize("raw,expected", [
     ("hello new line world", "Hello\nWorld"),
     ("hello new paragraph world", "Hello\n\nWorld"),
@@ -85,3 +83,23 @@ def test_command_input_with_real_newline_documented():
     # input is collapsed once any command fires; the command's own break stays.
     out = clean("first line\nsecond new line third", commands=DEFAULT_COMMANDS)
     assert out == "First line second\nThird"
+
+
+@pytest.mark.parametrize("raw,expected", [
+    ("hello. how are you", "Hello. How are you"),
+    ("yes. okay. fine", "Yes. Okay. Fine"),
+    ("wait! what? no", "Wait! What? No"),
+    ("send it to john@gmail.com. thanks", "Send it to john@gmail.com. Thanks"),
+    ("example.com/pricing is live. ok", "example.com/pricing is live. Ok"),
+])
+def test_sentence_capitalization_after_punctuation(raw, expected):
+    assert clean(raw, commands=None) == expected
+
+
+def test_edge_line_breaks_from_commands_kept():
+    assert clean("hello new line", commands=DEFAULT_COMMANDS) == "Hello\n"
+    # apply_commands itself drops a leading break (commands.py, out of scope here)
+    assert clean("new paragraph hello", commands=DEFAULT_COMMANDS) == "Hello"
+    assert clean("\n\nhello") == "\n\nHello"
+    assert clean("  ", commands=DEFAULT_COMMANDS) == ""
+    assert clean(" \t ") == ""

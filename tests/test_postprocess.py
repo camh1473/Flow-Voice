@@ -284,4 +284,4 @@ def test_questions_get_a_mark_and_the_switch_turns_it_off():
     from flowvoice.postprocess import Postprocessor
     p = Postprocessor(None)
     assert p.process("what time is it", Config()) == "What time is it?"
-    assert p.process("what time is it", Config(auto_questions=False)) == "What time is it."
+    assert p.process("what time is it", Config(auto_questions=False)) == "What time is it"

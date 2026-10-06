@@ -33,25 +33,36 @@ Implemented as a pure state machine `talkmode.TalkMode` (injectable clock) with 
 - **Main window** (`ui/main_window.py`): resizable, remembers size/position, left sidebar with Home / History / Settings, rounded cards, system font (Segoe UI Variable), follows system light/dark.
   - Home: big status, the last transcription with Copy, Start/Stop button, hotkey hint.
   - History: search box, list (time, app, text), Copy, Delete, Clear all.
-  - Settings: click-to-record hotkey fields, model dropdown, microphone dropdown, toggles (start with Windows, save history, hands-free double-tap, pill always visible), silence timeout slider, UI size slider, the filler and backtrack phrase editors. Replaces `settings.py`.
+  - Settings: click-to-record hotkey fields, model dropdown, microphone dropdown, toggles (start with Windows, save history, hands-free double-tap, pill always visible), silence timeout slider, UI size slider, the filler and backtrack phrase editors, the spoken-commands switch and phrase table. Replaces `settings.py`.
 - **Tray**: `QSystemTrayIcon` with menu Open, Start/Stop, Quit; double-click opens the window. Closing the window hides it to tray.
 - Core code talks to the UI only through a small `Ui` interface: `set_state(state)`, `set_level(float)`, `notify(msg)`, `add_history(entry)`. The Qt implementation turns calls from worker/hook threads into signals so widgets are only touched on the Qt main thread.
 
-## 4. Other changes
+## 4. Spoken commands (punctuation and formatting)
+Say a command and the symbol or break is inserted into the text instead of the words. Pure module `commands.py`: `apply_commands(text, mapping) -> str`, run after backtracking and before filler cleanup.
+- **Default commands** (all editable in Settings as a phrase -> text table): "new line" -> line break; "new paragraph" -> blank line; "question mark" -> `?`; "exclamation point" / "exclamation mark" -> `!`; "period" / "full stop" -> `.`; "comma" -> `,`; "colon" -> `:`; "semicolon" -> `;`; "hyphen" -> `-`; "dash" / "em dash" -> an em dash; "ellipsis" -> `...`; "open quote" / "close quote" -> `"`; "open paren" / "close paren" -> `(` / `)`; "at sign" -> `@`; "slash" -> `/`; "ampersand" -> `&`; "percent sign" -> `%`; "dollar sign" -> `$`.
+- **Spacing rules:** punctuation attaches to the previous word with no space before it and one space after; a line break or paragraph break replaces the spaces around it; the next word after `.`, `?`, `!`, a line break or a paragraph break is capitalized; open/close quotes and parens hug their contents.
+- **Whisper punctuation is absorbed:** Whisper often writes its own punctuation around spoken commands ("Hello, comma, how are you question mark."). Punctuation characters (`. , ; ! ?`) directly touching a command phrase are consumed so the result is clean ("Hello, how are you?").
+- **Literal escape:** saying "literal" before a command types the word instead ("literal period" -> "period"), for the cases where you mean the word.
+- **Settings:** master switch `voice_commands` (default on) plus the editable `command_phrases` table. Added or removed phrases apply immediately.
+- **Known ambiguity:** words like "period", "colon", "dash" and "quote" are also ordinary words ("the time period"). They convert by default (you asked for them); the literal escape or removing the phrase in Settings handles the exceptions.
+- Pasted line breaks are sent as-is with Ctrl+V; single-line fields may show them as a space or ignore them.
+
+## 5. Other changes
 - `Recorder` gets an `on_level(float)` callback (RMS of each chunk, scaled 0..1) feeding the waveform and silence detection.
 - `Dictation` gets an `on_result(raw, clean)` callback used to write history.
-- `Config` gains: `hands_free: bool = True`, `silence_stop_seconds: float = 4.0`, `save_history: bool = True`, `pill_always_visible: bool = True`, `ui_scale: float = 1.0`.
+- `Config` gains: `voice_commands: bool = True`, `command_phrases: dict[str, str]` (defaults above), `hands_free: bool = True`, `silence_stop_seconds: float = 4.0`, `save_history: bool = True`, `pill_always_visible: bool = True`, `ui_scale: float = 1.0`.
 - Settings apply live except hotkeys/model/microphone/start-with-Windows, which restart the app as in v1.
 - Remove dependencies `pystray` and `Pillow`; add `PySide6`. Remove `tray.py` and `settings.py` (their pure helpers `parse_phrases` and `needs_restart` move to `settings_logic.py`).
 
 ## Testing
 - Unit: `TalkMode` (hold, tap, double-tap latch, stop-by-tap, cancel, auto-stop on silence, 5-minute cap, injected clock), `History` (tmp db: add/list/search/delete/clear, save_history off), recorder levels, config defaults and round-trip, settings helpers.
+- Spoken commands (table-driven): each default command; spacing and capitalization ("hello comma how are you question mark" -> "Hello, how are you?"); absorbed Whisper punctuation ("Hello, comma, how" -> "Hello, how"); "new line" / "new paragraph" produce the right breaks and capitalize the next word; "literal period" types "period"; custom phrase added or removed; master switch off leaves words untouched; interaction with backtracking ("scratch that" still deletes the last sentence including a spoken comma).
 - App integration with fakes: double-tap cycle pastes once, silence stop pastes, history entry written after paste, no entry when `save_history` is off.
 - Qt smoke tests with `QT_QPA_PLATFORM=offscreen`: pill and main window construct; pill renders each state to a PNG that is visually reviewed; settings form round-trips to `Config`.
 - Manual (needs the user): double-tap latch, click-to-toggle pill, silence auto-stop, pill never steals focus before a paste, history entries appear, window size and scale feel right.
 
 ## Success criteria
-Double-tap Right Ctrl, speak a sentence, pause; it stops by itself and the text appears at the cursor with no key held. The pill is red with a moving waveform while recording and never takes focus from the app being typed into. The History tab lists what was said, can be searched, and can be cleared or turned off. Existing v1 behavior (hold to dictate, backtracking, read-aloud) is unchanged.
+Double-tap Right Ctrl, speak a sentence, pause; it stops by itself and the text appears at the cursor with no key held. The pill is red with a moving waveform while recording and never takes focus from the app being typed into. The History tab lists what was said, can be searched, and can be cleared or turned off. Saying "hello comma new paragraph how are you question mark" pastes "Hello," then a blank line then "How are you?". Existing v1 behavior (hold to dictate, backtracking, read-aloud) is unchanged.
 
 ## Risks
 - Qt owns the main thread: hook, recorder and pipeline threads must only reach widgets through signals.

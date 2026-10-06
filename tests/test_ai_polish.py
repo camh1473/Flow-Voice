@@ -612,6 +612,36 @@ def test_connector_words_may_drop_in_lists():
     assert ai_acceptable(original, candidate)
 
 
+LINK_END = ("Thanks for touring the model home today, I will send the price sheet tomorrow and here is "
+            f"the link to the floor plans {P0}")
+LINK_START = (f"{P0} is the link to the floor plans, and I will send the price sheet tomorrow after "
+              "I talk to the builder about the lot premium")
+
+
+@pytest.mark.parametrize("original,candidate", [
+    (LINK_END, LINK_END.replace(f" {P0}", "").replace("today,", f"today, {P0}")),
+    (LINK_START, LINK_START.replace(f"{P0} is", "Is") + f" {P0}"),
+    (SIGNOFF, SIGNOFF.replace(f"plans {P0} and", f"plans and {P0}")),
+])
+def test_moved_placeholder_rejected(original, candidate):
+    from flowvoice.ai_polish import rejection_reason
+    assert count_words(original) >= 20
+    assert ai_acceptable(original, original)
+    assert rejection_reason(original, candidate) is not None
+
+
+def test_placeholder_bullet_item_accepted():
+    original = (f"For the meeting tomorrow the agenda is budget, {P0}, hiring, and the schedule for the "
+                "new phase of the community")
+    candidate = (f"For the meeting tomorrow the agenda is:\n- Budget\n- {P0}\n- Hiring\n"
+                 "- The schedule for the new phase of the community")
+    assert ai_acceptable(original, candidate)
+
+
+def test_placeholder_between_same_words_in_bullets_accepted():
+    assert ai_acceptable(SIGNOFF, SIGNOFF.replace(f"plans {P0} and please", f"plans {P0}.\n\nPlease"))
+
+
 def test_placeholders_in_same_order_accepted():
     assert ai_acceptable(SIGNOFF, SIGNOFF.replace(" and please", ".\n\nPlease"))
 

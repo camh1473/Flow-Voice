@@ -74,6 +74,7 @@ SAMPLE_TEXT = (
 
 _PUA = re.compile("[" + chr(0xE000) + "-" + chr(0xF8FF) + "]")
 _WORD = re.compile(r"\w+")
+_WORD_OR_PLACEHOLDER = re.compile("[" + chr(0xE000) + "-" + chr(0xF8FF) + r"]|\w+")
 _MARKER = re.compile(r"(?m)^[ \t]*(?:[-*]|\d+[.)])[ \t]+")
 _LIST_MARKUP = re.compile(r"(?m)^[ \t]*(?:- |\d+\. )")
 _APOSTROPHES = str.maketrans({chr(0x2018): "'", chr(0x2019): "'"})
@@ -159,8 +160,16 @@ def _facts(text: str) -> list[str]:
     return out
 
 
+def _sequence(text: str) -> list[str]:
+    """Lowercase words with each snippet placeholder kept as its own token, in order."""
+    return [t.lower() for t in _WORD_OR_PLACEHOLDER.findall(_MARKER.sub("", text))]
+
+
 def _changes_words(original: list[str], candidate: list[str]) -> bool:
-    """True unless `candidate` is `original` with only list connector words deleted."""
+    """True unless `candidate` is `original` with only list connector words deleted.
+
+    Placeholders are tokens too, so a moved, added or dropped snippet counts as a change.
+    """
     matcher = difflib.SequenceMatcher(None, original, candidate, autojunk=False)
     for op, i1, i2, _, _ in matcher.get_opcodes():
         if op in ("replace", "insert"):
@@ -240,7 +249,7 @@ def rejection_reason(original: str, candidate: str) -> str | None:
         return "rejected: reordered words"
     if _repeats_sentence(original, candidate):
         return "rejected: repeated a sentence"
-    if _changes_words(o_words, c_words):
+    if _changes_words(_sequence(original), _sequence(candidate)):
         return "rejected: changed words"
     return None
 

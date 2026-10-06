@@ -28,6 +28,13 @@ STORE = "Going to the store for:\n1. Apples\n2. Bananas\n3. Oranges"
     ("1. Apples, 2. Bananas, 3. Oranges.", "1. Apples\n2. Bananas\n3. Oranges"),
     ("Get 1. milk 3. tea 2. eggs", "Get:\n1. Milk 3. tea\n2. Eggs"),
     ("Get 1. milk 2. eggs and then", "Get:\n1. Milk\n2. Eggs"),
+    ("1. milk 2. eggs", "1. Milk\n2. Eggs"),
+    ("Buy 1: milk, 2, eggs", "Buy:\n1. Milk\n2. Eggs"),
+    ("Buy 1, milk, 2, eggs, 3, bread.", "Buy:\n1. Milk\n2. Eggs\n3. Bread"),
+    ("Agenda: 1. call Dr. Smith 2. email Mr. Jones about the deal.",
+     "Agenda:\n1. Call Dr. Smith\n2. Email Mr. Jones about the deal"),
+    ("Bring 1. pens 2. paper, tape, etc. and more", "Bring:\n1. Pens\n2. Paper, tape, etc. and more"),
+    ("Bring 1. pens 2. snacks, e.g. chips. Then go.", "Bring:\n1. Pens\n2. Snacks, e.g. chips\n\nThen go."),
 ])
 def test_numbered_lists(text, expected):
     assert format_lists(text) == expected
@@ -60,6 +67,17 @@ def test_numbered_lists(text, expected):
     "I'm number one, you're number two.",
     "Room 1, 2, and 3 are free.",
     "$1, $2.",
+    "It was one, maybe two, people.",
+    "At one, I eat. At two, I nap.",
+    "Step one, preheat. Step two, mix.",
+    "Tickets for 1, maybe 2, adults.",
+    "Give me 1, I want 2. Thanks.",
+    "My address is 1, Main Street, apartment 2, Houston.",
+    "This is my number one priority. Number two is sales.",
+    "He is the number one seller and the number two closer.",
+    "Our number one goal, their number two goal.",
+    "I woke up at 1. Then at 2. Then I gave up.",
+    "It ended at 1. But at 2. So what.",
 ])
 def test_unchanged(text):
     assert format_lists(text) == text
@@ -91,6 +109,11 @@ def test_newline_in_last_item_starts_tail():
     "number one call Sam number two send the plans",
     "First, wake up. Second, make coffee. Third, ship it.",
     "I want one, two, or three apples",
+    "Going to the store for one, apples, two, bananas, three, oranges.",
+    "Agenda: 1. call Dr. Smith 2. email Mr. Jones about the deal.",
+    "This is my number one priority. Number two is sales.",
+    "I woke up at 1. Then at 2. Then I gave up.",
+    "It was one, maybe two, people.",
 ])
 def test_idempotent(text):
     once = format_lists(text)

@@ -7,6 +7,7 @@ class Marker(NamedTuple):
     start: int
     end: int
     value: int
+    kind: str = ""
 
 
 _NUMBER_WORDS = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"]
@@ -18,9 +19,12 @@ _NUM = r"\d{1,2}|" + "|".join(_NUMBER_WORDS)
 _SET_OFF = r"[.,:)](?=\s|$)"
 
 _NUMBER_MARKER = re.compile(
-    rf"(?<![\w.,:$])(?:number\s+(?P<a>{_NUM})(?!\w)(?:{_SET_OFF})?|(?P<b>{_NUM}){_SET_OFF})",
+    rf"(?<![\w.,:$])(?:number\s+(?P<a>{_NUM})(?!\w)(?:{_SET_OFF})?|(?P<b>{_NUM})(?P<p>[.,:)])(?=\s|$))",
     re.IGNORECASE,
 )
+_DETERMINER = re.compile(r"(?<!\w)(?:my|our|your|his|her|their|its|the|a|an)\s+$", re.IGNORECASE)
+_SENTENCE_GLUE = re.compile(r"\s+(?:Then|And|But|So)(?!\w)")
+_ABBREVIATION = re.compile(r"(?<![\w.])(?:mrs|mr|ms|dr|st|jr|sr|vs|etc|e\.g|i\.e)$", re.IGNORECASE)
 _ORDINAL_MARKER = re.compile(
     r"(?<!\w)(?P<o>" + "|".join(sorted(_ORDINALS, key=len, reverse=True)) + r")(?!\w)(?!\s+of\s+all\b)(?P<p>[,:])?",
     re.IGNORECASE,
@@ -41,15 +45,23 @@ def _has_list_markup(text: str) -> bool:
 
 
 def _number_markers(text: str) -> list[Marker]:
-    return [
-        Marker(m.start(), m.end(), _value(m.group("a") or m.group("b")))
-        for m in _NUMBER_MARKER.finditer(text)
-    ]
+    markers: list[Marker] = []
+    for m in _NUMBER_MARKER.finditer(text):
+        if m.group("a"):
+            if _DETERMINER.search(text[:m.start()]):
+                continue
+            kind = "number"
+        else:
+            kind = m.group("p")
+            if kind == "." and _SENTENCE_GLUE.match(text, m.end()):
+                continue
+        markers.append(Marker(m.start(), m.end(), _value(m.group("a") or m.group("b")), kind))
+    return markers
 
 
 def _ordinal_markers(text: str) -> list[Marker]:
     return [
-        Marker(m.start(), m.end(), _ORDINALS[m.group("o").lower()])
+        Marker(m.start(), m.end(), _ORDINALS[m.group("o").lower()], "ordinal")
         for m in _ORDINAL_MARKER.finditer(text)
         if m.group("p") or _SENTENCE_START.search(text[:m.start()])
     ]
@@ -67,7 +79,14 @@ def _select_run(markers: list[Marker]) -> list[Marker]:
                 run.append(m)
         if len(run) > len(best):
             best = run
-    return best if len(best) >= 2 else []
+    return best if len(best) >= _min_length(best) else []
+
+
+def _min_length(run: list[Marker]) -> int:
+    """Comma-only runs (a final `N.` may end the sentence) need 3 markers; others need 2."""
+    kinds = [m.kind for m in run]
+    comma_only = bool(kinds) and all(k == "," for k in kinds[:-1]) and kinds[-1] in (",", ".")
+    return 3 if comma_only else 2
 
 
 def _clean_item(item: str) -> str:
@@ -96,7 +115,11 @@ def _split(text: str, run: list[Marker]) -> tuple[str, list[str], str]:
     bounds = [m.start for m in run[1:]] + [len(text)]
     items = [text[m.end:end] for m, end in zip(run, bounds)]
     tail = ""
-    end = _LAST_ITEM_END.search(items[-1])
+    end = next(
+        (e for e in _LAST_ITEM_END.finditer(items[-1])
+         if not (e.group() == "." and _ABBREVIATION.search(items[-1][:e.start()]))),
+        None,
+    )
     if end:
         cut = end.start() if end.group() == "\n" else end.end()
         items[-1], tail = items[-1][:cut], items[-1][end.end():].strip()

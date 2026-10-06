@@ -87,7 +87,10 @@ _CALENDAR = frozenset(
     "june july august september october november december".split())
 _CALENDAR_ABBREVIATIONS = frozenset(
     "mon tue tues wed thu thur thurs fri sat sun jan feb mar apr jun jul aug sep sept oct nov dec".split())
-_SENTENCE_LEAD = " \t\"'([" + chr(0x201C)
+_CONNECTORS = frozenset(
+    "and then or also next first second third fourth fifth firstly secondly thirdly "
+    "one two three four five six seven eight nine ten".split())  # may vanish when a list is made
+_SENTENCE_LEAD =" \t\"'([" + chr(0x201C)
 _MARKDOWN = (re.compile(r"\*\*"), re.compile(r"__"), re.compile("`"), re.compile(r"(?m)^[ \t]*[#>]"))
 _SENTENCE_SPLIT = re.compile(r"[.!?\n]+")
 _THINK = re.compile(r"^\s*<think>.*?</think>", re.IGNORECASE | re.DOTALL)
@@ -138,21 +141,32 @@ def _tokens(text: str) -> list[str]:
     return [_token(m.group()) for m in _TOKEN.finditer(_prep(text))]
 
 
-def _facts(text: str) -> Counter:
-    """Numbers, number words, negations, weekdays and months: these must survive exactly."""
-    out: Counter = Counter()
+def _facts(text: str) -> list[str]:
+    """Numbers, number words, negations, weekdays and months in order: these must survive exactly."""
+    out: list[str] = []
     for m in _TOKEN.finditer(_prep(text)):
         raw = m.group()
         tok = _token(raw)
         if raw[0] in "$0123456789":
-            out[tok] += 1
+            out.append(tok)
         elif tok.endswith("n't"):
-            out["n't"] += 1
+            out.append("n't")
         elif tok in _NUMBER_WORDS or tok in _NEGATIONS or tok in _CALENDAR:
-            out[tok] += 1
+            out.append(tok)
         elif raw[0].isupper() and tok in _CALENDAR_ABBREVIATIONS:
-            out[tok] += 1
+            out.append(tok)
     return out
+
+
+def _changes_words(original: list[str], candidate: list[str]) -> bool:
+    """True unless `candidate` is `original` with only list connector words deleted."""
+    matcher = difflib.SequenceMatcher(None, original, candidate, autojunk=False)
+    for op, i1, i2, _, _ in matcher.get_opcodes():
+        if op in ("replace", "insert"):
+            return True
+        if op == "delete" and any(w not in _CONNECTORS for w in original[i1:i2]):
+            return True
+    return False
 
 
 def _proper_nouns(text: str) -> Counter:
@@ -190,8 +204,11 @@ def rejection_reason(original: str, candidate: str) -> str | None:
     """Why `candidate` may not replace `original`, or None when it is acceptable."""
     if not isinstance(candidate, str) or not candidate.strip():
         return "rejected: empty output"
-    if Counter(_PUA.findall(original)) != Counter(_PUA.findall(candidate)):
+    placeholders = _PUA.findall(original), _PUA.findall(candidate)
+    if Counter(placeholders[0]) != Counter(placeholders[1]):
         return "rejected: lost snippet placeholder"
+    if placeholders[0] != placeholders[1]:
+        return "rejected: moved a snippet placeholder"
     if _echoes_prompt(candidate) and not _echoes_prompt(original):
         return "rejected: repeated its instructions"
     if any(p.search(candidate) and not p.search(original) for p in _MARKDOWN):
@@ -216,11 +233,14 @@ def rejection_reason(original: str, candidate: str) -> str | None:
     present = Counter(c_tokens)
     if any(present[name] < n for name, n in _proper_nouns(original).items()):
         return "rejected: dropped a name"
-    ratio = difflib.SequenceMatcher(None, _words(original), _words(candidate), autojunk=False).ratio()
+    o_words, c_words = _words(original), _words(candidate)
+    ratio = difflib.SequenceMatcher(None, o_words, c_words, autojunk=False).ratio()
     if ratio < MIN_ORDER:
         return "rejected: reordered words"
     if _repeats_sentence(original, candidate):
         return "rejected: repeated a sentence"
+    if _changes_words(o_words, c_words):
+        return "rejected: changed words"
     return None
 
 

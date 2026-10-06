@@ -545,12 +545,81 @@ REJECTED["name mid-text"] = (BASE, BASE.replace("if Dana sends", "if Diana sends
 REJECTED["middle sentences swapped"] = (WALK, WALK.replace(f"{_S2} {_S3}", f"{_S3} {_S2}"))
 
 
-def test_moving_a_short_sentence_is_a_known_gap():
-    """Documented cost of the 0.9 order ratio: a short sentence (<10% of words) may move."""
+def test_moving_a_short_sentence_is_rejected():
+    """The word-opcode check closes the old 0.9-ratio gap: a short sentence may not move."""
     swapped = FOUR.replace(
         "The lender is happy. The title work is still open because of an old easement on the back fence line.",
         "The title work is still open because of an old easement on the back fence line. The lender is happy.")
-    assert ai_acceptable(FOUR, swapped)
+    assert not ai_acceptable(FOUR, swapped)
+
+
+# ---- final review I1: meaning changes, ordered facts and placeholders ----
+
+FRAMING = ("The framing on lot twelve is behind because of the rain last week but the builder thinks "
+           "it will catch up by the end of the month.")
+BRICK = ("The buyers picked the red brick for the front elevation and the white trim for the windows, "
+         "so please update the selection sheet today.")
+SIGNOFF = (f"Hi Sam, here is the link to the floor plans {P0} and please call me if you have any "
+           f"questions about the lot premium or the upgrades. {P1}")
+PRICES = ("The upgrade on lot 12 is $300 per foot and the upgrade on lot 14 is $500 per foot, so let "
+          "the buyers know before they pick.")
+DAYS = ("The inspection is on Monday and the walkthrough is on Friday, so please tell the buyers to keep "
+        "both mornings open this week.")
+
+MEANING_CHANGES = {
+    "behind->ahead": (FRAMING, FRAMING.replace("behind", "ahead")),
+    "builder->buyer": (FRAMING, FRAMING.replace("the builder", "the buyer")),
+    "red->blue": (BRICK, BRICK.replace("red", "blue")),
+    "snippets swapped": (SIGNOFF, SIGNOFF.replace(P0, "@").replace(P1, P0).replace("@", P1)),
+    "money swapped": (PRICES, PRICES.replace("$300", "@").replace("$500", "$300").replace("@", "$500")),
+    "weekdays swapped": (DAYS, DAYS.replace("Monday", "@").replace("Friday", "Monday").replace("@", "Friday")),
+}
+
+
+@pytest.mark.parametrize("name", list(MEANING_CHANGES))
+def test_meaning_changes_rejected(name):
+    from flowvoice.ai_polish import rejection_reason
+    original, candidate = MEANING_CHANGES[name]
+    assert count_words(original) >= 20
+    assert original != candidate
+    assert ai_acceptable(original, original), name
+    assert rejection_reason(original, candidate) is not None, name
+
+
+@pytest.mark.parametrize("name,reason", [
+    ("behind->ahead", "rejected: changed words"),
+    ("snippets swapped", "rejected: moved a snippet placeholder"),
+    ("money swapped", "rejected: changed a number, date or negation"),
+    ("weekdays swapped", "rejected: changed a number, date or negation"),
+])
+def test_meaning_change_reasons(name, reason):
+    from flowvoice.ai_polish import rejection_reason
+    assert rejection_reason(*MEANING_CHANGES[name]) == reason
+
+
+def test_connector_words_may_drop_in_lists():
+    original = ("Before the closing I need to call the lender, email the title company, and then "
+                "print the disclosure packet for the buyers to sign.")
+    candidate = ("Before the closing I need to:\n- Call the lender\n- Email the title company\n"
+                 "- Print the disclosure packet for the buyers to sign.")
+    assert ai_acceptable(original, candidate)
+
+
+def test_placeholders_in_same_order_accepted():
+    assert ai_acceptable(SIGNOFF, SIGNOFF.replace(" and please", ".\n\nPlease"))
+
+
+@pytest.mark.parametrize("original,candidate", [
+    # Cost: a harmless added word is rejected.
+    (BRICK, BRICK.replace("update the selection", "update the new selection")),
+    # Cost: dropping a word that is not a list connector is rejected.
+    (BRICK, BRICK.replace(", so please", ", please")),
+    # Cost: a contraction or synonym swap is rejected.
+    (FRAMING, FRAMING.replace("it will", "it'll")),
+])
+def test_word_opcode_costs(original, candidate):
+    from flowvoice.ai_polish import rejection_reason
+    assert rejection_reason(original, candidate) == "rejected: changed words"
 
 
 @pytest.mark.parametrize("name,reason", [

@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QScrollArea
 from flowvoice.cleanup import DEFAULT_BACKTRACK_PHRASES, DEFAULT_FILLER_PHRASES
 from flowvoice.commands import DEFAULT_COMMANDS
 from flowvoice.config import Config
+from flowvoice.settings_logic import escape_text
 from flowvoice.ui.hotkey_edit import CAPTURE_TEXT, HotkeyEdit
 from flowvoice.ui.main_window import MainWindow
 from flowvoice.ui.settings_view import MODELS, SettingsView
@@ -598,6 +599,95 @@ def test_snippet_warnings_label_tracks_current_rows(qapp):
     view.snippets_table.setCurrentCell(1, 0)
     view.remove_snippet_button.click()
     assert view.snippet_warnings_label.isHidden()
+
+
+def test_newline_only_snippet_has_no_warning(qapp):
+    view = _ai_view(config=Config(command_phrases={}, snippets={"line break": "\n"}))
+    assert view.snippet_warnings_label.isHidden()
+
+
+def test_snippet_over_limit_warns_counting_distinct_usable_rows(qapp):
+    view = _ai_view(config=Config(command_phrases={}))
+    for i in range(100):
+        view.add_snippet_row(f"trigger {i}", "x")
+    view.add_snippet_row("trigger  0", "dup")
+    view.add_snippet_row("", "")
+    assert "Only the first" not in view.snippet_warnings_label.text()
+    view.add_snippet_row("trigger 100", "x")
+    assert not view.snippet_warnings_label.isHidden()
+    assert "Only the first 100 snippets are used (101 rows)." in view.snippet_warnings_label.text()
+    assert len(view.to_config().snippets) == 100
+    view.snippets_table.setCurrentCell(view.snippets_table.rowCount() - 1, 0)
+    view.remove_snippet_button.click()
+    assert "Only the first" not in view.snippet_warnings_label.text()
+
+
+def test_snippet_over_limit_warning_cleared_on_load(qapp):
+    snippets = {f"trigger {i}": "x" for i in range(100)}
+    view = _ai_view(config=Config(command_phrases={}, snippets=snippets))
+    assert view.snippet_warnings_label.isHidden()
+    view.add_snippet_row("one more", "x")
+    assert not view.snippet_warnings_label.isHidden()
+    view.load(Config(command_phrases={}, snippets=snippets))
+    assert view.snippet_warnings_label.isHidden()
+
+
+def test_snippet_blank_trigger_rows_warn(qapp):
+    view = _ai_view(config=Config(command_phrases={}))
+    view.add_snippet_row("", "")
+    view.add_snippet_row("   ", "")
+    assert view.snippet_warnings_label.isHidden()
+    view.add_snippet_row("  ", "orphan text")
+    view.add_snippet_row("", "\\n")
+    assert ("A snippet needs a trigger phrase: 2 row(s) without one will be ignored."
+            in view.snippet_warnings_label.text())
+
+
+def test_words_warning_label_hidden_by_default(qapp):
+    view = _ai_view(config=V3)
+    assert view.words_warning_label.isHidden()
+
+
+def test_terms_over_limit_warns_counting_distinct_lines(qapp):
+    view = _ai_view()
+    lines = [f"term {i}" for i in range(200)] + ["TERM 0", "", "  "]
+    view.terms_edit.setPlainText("\n".join(lines))
+    assert view.words_warning_label.isHidden()
+    view.terms_edit.setPlainText("\n".join(lines + ["term 200", "term 201"]))
+    assert not view.words_warning_label.isHidden()
+    assert ("Only the first 200 dictionary terms are used (202 lines)."
+            in view.words_warning_label.text())
+    assert len(view.to_config().dictionary_terms) == 200
+
+
+def test_fixes_over_limit_and_blank_key_warn(qapp):
+    view = _ai_view()
+    for i in range(201):
+        view.add_fix_row(f"heard {i}", "x")
+    assert ("Only the first 200 corrections are used (201 rows)."
+            in view.words_warning_label.text())
+    view.add_fix_row(" ", "Lonely")
+    assert ('A correction needs a "heard as" text: 1 row(s) without one will be ignored.'
+            in view.words_warning_label.text())
+    view.load(Config())
+    assert view.words_warning_label.isHidden()
+
+
+def test_snippet_texts_survive_view_round_trip_verbatim(qapp):
+    dash = chr(0x2014)
+    view = _ai_view(config=Config(command_phrases={}))
+    view.add_snippet_row("sig", escape_text("Best, \n\n"))
+    view.add_snippet_row("literal", "a\\\\nb")
+    view.add_snippet_row("slash end", "path\\")
+    view.add_snippet_row("dash", f"a {dash} b")
+    view.add_snippet_row("tabbed", "col1\\tcol2")
+    first = view.to_config()
+    assert first.snippets == {"sig": "Best, \n\n", "literal": "a\\nb", "slash end": "path\\",
+                              "dash": f"a {dash} b", "tabbed": "col1\tcol2"}
+    again = _ai_view(config=first)
+    assert again.to_config() == first
+    again.load(first)
+    assert again.to_config().snippets == first.snippets
 
 
 def test_snippet_warnings_follow_command_table_edits(qapp):

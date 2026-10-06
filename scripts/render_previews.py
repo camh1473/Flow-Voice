@@ -138,8 +138,12 @@ def render_settings(dark: bool, scale: float = 1.0, scroll: float = 0.0,
 PREVIEW_V3 = Config(
     dictionary_terms=["Perry Homes", "Bellaire", "Cypress Creek Lakes"],
     dictionary_fixes={"perry homes": "Perry Homes", "flow boys": "Flow Voice"},
-    snippets={"my signature": "Best,\nCam", "new line": "\n", "office hours": "Mon-Fri 9-5"},
+    snippets={"my signature": "Best,\nCam", "line break": "\n", "office hours": "Mon-Fri 9-5"},
     ai_enabled=True)
+PREVIEW_V3_WARNINGS = dataclasses.replace(
+    PREVIEW_V3,
+    dictionary_terms=PREVIEW_V3.dictionary_terms + [f"Term {i}" for i in range(205)],
+    snippets={**PREVIEW_V3.snippets, **{f"street {i}": f"{i} Main St" for i in range(98)}})
 
 
 class _PreviewProbe:
@@ -151,19 +155,27 @@ class _PreviewProbe:
 
 
 def render_settings_words(dark: bool, scale: float = 1.0,
-                          size: tuple[int, int] = (880, 1560)) -> QImage:
-    """The Settings tab scrolled so the Words, Snippets and Lists and AI cards are in view."""
+                          size: tuple[int, int] = (880, 1560), warnings: bool = False) -> QImage:
+    """The Settings tab scrolled so the Words, Snippets and Lists and AI cards are in view.
+
+    `warnings` loads over-limit terms and snippets plus rows without a key, so every
+    Words / Snippets warning line shows."""
     settings = QSettings(str(Path(tempfile.gettempdir()) / "flowvoice-preview.ini"),
                          QSettings.IniFormat)
     mics = [("System default", None), ("1: Microphone (USB Audio)", 1)]
-    win = MainWindow(dataclasses.replace(PREVIEW_V3, ui_scale=scale), None, lambda cfg: None,
+    sample = PREVIEW_V3_WARNINGS if warnings else PREVIEW_V3
+    win = MainWindow(dataclasses.replace(sample, ui_scale=scale), None, lambda cfg: None,
                      settings=settings, mics=mics, dark=dark, ai_probe=_PreviewProbe())
     win.resize(round(size[0] * scale), round(size[1] * scale))
     win.show_page("Settings")
     win.show()
     win.set_ai_status("missing model", "ollama pull qwen3.5:2b-q4_K_M")
-    QApplication.processEvents()
     view = win.settings_view
+    if warnings:
+        view.add_fix_row(" ", "Lonely")
+        view.add_snippet_row("", "Text with no trigger")
+        view.add_snippet_row("new line", "\\n")
+    QApplication.processEvents()
     caption = view.terms_edit.parentWidget()
     bar = view.scroll.verticalScrollBar()
     bar.setValue(min(bar.maximum(), caption.y() - round(40 * scale)))
@@ -207,6 +219,9 @@ def main() -> None:
         path = OUT / f"settings_words_{name}.png"
         render_settings_words(dark).save(str(path))
         print(path)
+    path = OUT / "settings_words_warnings_light.png"
+    render_settings_words(False, warnings=True).save(str(path))
+    print(path)
     path = OUT / "home_recording.png"
     render_home(False, "recording").save(str(path))
     print(path)

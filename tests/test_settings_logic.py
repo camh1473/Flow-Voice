@@ -114,12 +114,22 @@ def test_row_keys_collapse_internal_whitespace_values_untouched():
 
 
 def test_snippet_warnings_command_collision_short_trigger_and_empty_text():
-    snippets = {"new line": "x", "ab": "hello", "sig": "  ", "ok one": "fine"}
+    snippets = {"new line": "x", "ab": "hello", "sig": "", "ok one": "fine"}
     out = snippet_warnings(snippets, {"New Line": "\n"})
     assert len(out) == 3
     assert "new line" in out[0] and "snippet wins" in out[0]
     assert "ab" in out[1] and "3" in out[1]
     assert "sig" in out[2] and "empty" in out[2]
+
+
+@pytest.mark.parametrize("text", ["\n", "   ", "\t", "\n\n "])
+def test_snippet_warnings_whitespace_only_text_is_legitimate(text):
+    assert snippet_warnings({"break here": text}, {}) == []
+
+
+def test_snippet_warnings_zero_length_text_warns():
+    out = snippet_warnings({"break here": ""}, {})
+    assert len(out) == 1 and "empty" in out[0]
 
 
 def test_snippet_warnings_clean_is_empty():

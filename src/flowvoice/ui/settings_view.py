@@ -57,6 +57,7 @@ NO_AI_TIP = "AI is not available"
 TEST_HELP = "Test AI sends a short sample and shows the result and how long it took."
 SAVED_MS = 1400
 ERROR_CHARS = 120
+UNLIMITED = 10 ** 9  # counting limit for "how many rows would there be"
 
 PAGE_MARGINS = (36, 30, 36, 20)
 CARD_MARGINS = (18, 4, 18, 4)
@@ -81,6 +82,19 @@ def _label(text: str, name: str, wrap: bool = False) -> QLabel:
 def _short_error(err: BaseException) -> str:
     lines = str(err).strip().splitlines()
     return (lines[0] if lines else type(err).__name__)[:ERROR_CHARS]
+
+
+def _row_problems(rows: list[tuple[str, str]], limit: int, noun: str, key_needed: str
+                  ) -> list[str]:
+    """Warnings for rows that Save would drop: over `limit` distinct keys, or text with no key."""
+    out = []
+    count = len(rows_to_dict(rows, lower_keys=True, limit=UNLIMITED))
+    if count > limit:
+        out.append(f"Only the first {limit} {noun} are used ({count} rows).")
+    keyless = sum(1 for key, value in rows if not key.strip() and value.strip())
+    if keyless:
+        out.append(f"{key_needed}: {keyless} row(s) without one will be ignored.")
+    return out
 
 
 def ai_status_text(status: str, detail: str) -> str:
@@ -201,6 +215,11 @@ class SettingsView(QWidget):
             for signal in (model.dataChanged, model.rowsInserted, model.rowsRemoved,
                            model.modelReset):
                 signal.connect(self._refresh_snippet_warnings)
+        model = self.fixes_table.model()
+        for signal in (model.dataChanged, model.rowsInserted, model.rowsRemoved,
+                       model.modelReset):
+            signal.connect(self._refresh_words_warnings)
+        self.terms_edit.textChanged.connect(self._refresh_words_warnings)
         self._models_ready.connect(self._on_models, Qt.QueuedConnection)
         self._test_done.connect(self._on_tested, Qt.QueuedConnection)
         self._status_changed.connect(self._apply_ai_status)
@@ -420,9 +439,12 @@ class SettingsView(QWidget):
                          "One per line.", self.terms_edit, ROW_MARGINS)
         card.addWidget(_separator())
         self.fixes_table = self._table(("Heard as", "Write as"), SMALL_TABLE_HEIGHT)
-        self.add_fix_button, self.remove_fix_button, _ = self._table_block(
+        self.add_fix_button, self.remove_fix_button, block = self._table_block(
             card, "Corrections", "Fix words the speech model keeps getting wrong.",
             self.fixes_table)
+        self.words_warning_label = _label("", "WarningText", wrap=True)
+        self.words_warning_label.hide()
+        block.addWidget(self.words_warning_label)
 
     def _build_snippets(self, page: QVBoxLayout) -> None:
         card = self._section(page, "Snippets")
@@ -669,14 +691,30 @@ class SettingsView(QWidget):
         if row >= 0:
             table.removeRow(row)
 
+    @staticmethod
+    def _show_warnings(label: QLabel, messages: list[str]) -> None:
+        label.setText("\n".join(messages))
+        label.setVisible(bool(messages))
+
     def _refresh_snippet_warnings(self, *_) -> None:
         rows = self.snippet_rows()
         snippets = rows_to_dict(rows, lower_keys=True, limit=MAX_SNIPPETS)
         messages = snippet_warnings(snippets, rows_to_commands(self.command_rows()))
         messages += [f'"{key}" is used by more than one snippet; the last one wins.'
                      for key in rows_duplicates(rows, lower_keys=True)]
-        self.snippet_warnings_label.setText("\n".join(messages))
-        self.snippet_warnings_label.setVisible(bool(messages))
+        messages += _row_problems(rows, MAX_SNIPPETS, "snippets",
+                                  "A snippet needs a trigger phrase")
+        self._show_warnings(self.snippet_warnings_label, messages)
+
+    def _refresh_words_warnings(self, *_) -> None:
+        messages = []
+        terms = len(terms_from_text(self.terms_edit.toPlainText(), limit=UNLIMITED))
+        if terms > MAX_TERMS:
+            messages.append(f"Only the first {MAX_TERMS} dictionary terms are used "
+                            f"({terms} lines).")
+        messages += _row_problems(self.fix_rows(), MAX_FIXES, "corrections",
+                                  'A correction needs a "heard as" text')
+        self._show_warnings(self.words_warning_label, messages)
 
     # ----- AI probe (worker threads talk back only through queued signals) -----
 

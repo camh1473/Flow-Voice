@@ -80,7 +80,8 @@ def rows_duplicates(rows: list[tuple[str, str]], *, lower_keys: bool) -> list[st
 
 
 def snippet_warnings(snippets: dict[str, str], command_phrases: dict[str, str]) -> list[str]:
-    """One-line warnings for snippets that collide with a command, are too short, or are empty."""
+    """One-line warnings for snippets that collide with a command, are too short, or have no
+    text at all (whitespace-only text such as a line break is a real snippet)."""
     commands = {" ".join(p.lower().split()) for p in command_phrases}
     out: list[str] = []
     for trigger, text in snippets.items():
@@ -88,7 +89,7 @@ def snippet_warnings(snippets: dict[str, str], command_phrases: dict[str, str]) 
             out.append(f'"{trigger}" is also a spoken command; the snippet wins.')
         if len(trigger) < 3:
             out.append(f'"{trigger}" is shorter than 3 characters and may fire by accident.')
-        if not text.strip():
+        if text == "":
             out.append(f'The snippet "{trigger}" is empty.')
     return out
 

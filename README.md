@@ -97,7 +97,7 @@ To enable it:
 2. In a terminal run `ollama pull qwen3.5:2b-q4_K_M` (about 2 GB). Flow Voice never downloads models itself.
 3. **Settings > Lists and AI:** switch on **AI polish**, choose the model, press Save.
 
-With AI on, Flow Voice starts Ollama if it is not running, then loads the model. The status line shows `off`, `warming up`, `ready`, `model not installed` (with the pull command to run) or `unavailable` (with the reason, for example Ollama could not be started). A cold load can take about 30 seconds; dictations during that time paste the normal text. Each dictation waits at most 6 seconds for the AI. **Test AI** sends a sample and shows the result and how long it took.
+With AI on, Flow Voice starts Ollama if it is not running, then loads the model. It starts Ollama only on its default address (http://localhost:11434); if you set a custom `ai_url` in config.json, you must start Ollama on that address yourself. The status line shows `off`, `warming up`, `ready`, `model not installed` (with the pull command to run) or `unavailable` (with the reason, for example Ollama could not be started). A cold load can take about 30 seconds; dictations during that time paste the normal text. Each dictation waits at most 6 seconds for the AI. **Test AI** sends a sample and shows the result and how long it took.
 
 Safety: the AI only restructures. It may drop connector words like "and"/"then" when it makes a list; numbers, names, negations and the order of your words are checked and anything suspicious falls back to the normal text. In detail, its output is compared with what you said; if it replaced, added or reordered a word, dropped any word other than a list connector (and, then, or, also, next, first, second, third, one to ten), changed or swapped a number, date or negation, dropped a name, added formatting, repeated a sentence, lost or moved a snippet or timed out, the normal text is pasted instead. Dictations over 300 words skip the AI, because the model must finish within the timeout. Any AI failure falls back to the normal text and never blocks a paste.
 
@@ -124,6 +124,7 @@ Select text in any app and press **Ctrl+Alt+S**. Press it again to stop.
 - Starting dictation from the **Start dictation** button on Home or in the tray menu makes Flow Voice itself the foreground window, so the text appears only in the Last transcription card and in History. To paste into another app, use the hotkey or click the pill.
 - Lists are rule-based: unusual phrasing can be missed or, rarely, formatted when you did not mean a list. Turn **Automatic lists** off if that bothers you.
 - The AI is a small model: slow on a cold start and useful only for long dictations. Suspicious output is thrown away, so some dictations stay unformatted on purpose.
+- Flow Voice can start Ollama only on its default address (http://localhost:11434). With a custom `ai_url`, start Ollama yourself; if Ollama is stopped, Flow Voice may start a second, default-address server that it then cannot reach.
 - Limits: 200 dictionary terms, 200 corrections, 100 snippets; extra rows are ignored.
 - Starting a second copy of Flow Voice is not prevented; run only one.
 

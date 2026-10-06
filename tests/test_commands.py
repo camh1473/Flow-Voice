@@ -1,0 +1,73 @@
+import pytest
+
+from flowvoice.commands import DEFAULT_COMMANDS, apply_commands
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("hello comma how are you question mark", "hello, how are you?"),
+        ("Hello, comma, how are you question mark.", "Hello, how are you?"),
+        ("hello new line world", "hello\nworld"),
+        ("hello new paragraph world", "hello\n\nworld"),
+        ("bullet point apples bullet point pears", "- apples\n- pears"),
+        ("he said open quote hi there close quote", 'he said "hi there"'),
+        ("call open paren home close paren now", "call (home) now"),
+        ("see open bracket one close bracket", "see [one]"),
+        ("done full stop next", "done. next"),
+        ("john at sign gmail", "john@gmail"),
+        ("my underscore name", "my_name"),
+        ("dollar sign 5", "$5"),
+        ("50 percent sign", "50%"),
+        ("1 plus sign 1 equals sign 2", "1 + 1 = 2"),
+        ("salt ampersand pepper", "salt & pepper"),
+        ("wait semicolon go", "wait; go"),
+        ("well ellipsis maybe", "well... maybe"),
+        ("wow exclamation point", "wow!"),
+        ("wow exclamation mark", "wow!"),
+        ("literal comma", "comma"),
+        ("literal new line", "new line"),
+        ("hello NEW LINE world", "hello\nworld"),
+        ("Hello Comma world", "Hello, world"),
+        ("a red exclamation point", "a red!"),
+        ("hello , comma world", "hello, world"),
+        ("she said quote unquote", "she said quote unquote"),
+        ("this has no commands at all.", "this has no commands at all."),
+    ],
+)
+def test_apply_commands(text, expected):
+    assert apply_commands(text) == expected
+
+
+def test_longest_phrase_wins():
+    mapping = {"exclamation": "EXC", "exclamation point": "!"}
+    assert apply_commands("hi exclamation point", mapping) == "hi!"
+
+
+def test_custom_phrase():
+    assert apply_commands("great oops sign", {"oops sign": "!"}) == "great!"
+
+
+def test_custom_phrase_spaced_normally():
+    assert apply_commands("a smiley face b", {"smiley face": ":)x"}) == "a :)x b"
+
+
+def test_removed_phrase_leaves_words():
+    mapping = {k: v for k, v in DEFAULT_COMMANDS.items() if k != "comma"}
+    assert apply_commands("hello comma world", mapping) == "hello comma world"
+
+
+def test_empty_mapping_returns_text_unchanged():
+    text = "hello comma world new line"
+    assert apply_commands(text, {}) == text
+
+
+def test_guarded_words_left_alone_for_now():
+    assert apply_commands("a dash of salt") == "a dash of salt"
+    assert apply_commands("the time period is long") == "the time period is long"
+
+
+def test_default_mapping_not_mutated():
+    before = dict(DEFAULT_COMMANDS)
+    apply_commands("hello comma world")
+    assert DEFAULT_COMMANDS == before

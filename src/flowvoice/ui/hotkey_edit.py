@@ -17,8 +17,8 @@ def pretty_key(key: str) -> str:
 
 
 def _default_reader(suppress: bool = False) -> str:
-    import keyboard
-    return keyboard.read_hotkey(suppress=suppress)
+    from flowvoice.hotkey import read_hotkey_by_side
+    return read_hotkey_by_side(suppress=suppress)
 
 
 class HotkeyEdit(QLineEdit):

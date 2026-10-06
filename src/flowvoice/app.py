@@ -146,6 +146,9 @@ class App:
             return
         with self._injection():
             text = self._copy_selection()
+        if not text.strip():
+            self.ui.notify("Read aloud: select some text first")
+            return
         self.speaker.speak(text)
 
     def _on_done(self) -> None:

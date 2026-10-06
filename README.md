@@ -65,7 +65,7 @@ Examples:
 - Both phrase lists are editable in Settings.
 
 ## Settings
-- **Dictation:** push-to-talk key, read-aloud key (click the field, then press the new keys), speech model (`tiny.en`, `base.en`, `small.en`, `medium.en`; larger is more accurate but slower), microphone, save history.
+- **Dictation:** push-to-talk key, read-aloud key (click the field, then press the new keys; left and right Ctrl/Shift/Alt are told apart, so pressing Right Ctrl shows "Right Ctrl"), speech model (`tiny.en`, `base.en`, `small.en`, `medium.en`; larger is more accurate but slower), microphone, save history.
 - **Hands-free:** double-tap on/off and the stop-after-silence time.
 - **Interface:** always show the pill, interface size (scales the window and the pill), start with Windows.
 - **Phrases:** spoken commands on/off and the command table (write `\n` for a line break, `\t` for a tab), filler words, backtrack phrases, and a button to reset all of them to the built-in lists.

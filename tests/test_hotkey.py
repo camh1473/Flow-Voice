@@ -193,11 +193,108 @@ def test_disable_stops_other_key_callbacks():
     assert b.any_cb is None and b.cb is None
 
 
-def test_toggle_combo_triggers_on_release():
+def test_toggle_combo_triggers_on_key_press_not_release():
+    # Release-triggered combos depend on the order the user lets go of the keys; copy_selection
+    # already waits for the modifiers to come up, so the plain key-down trigger is the reliable one.
     class B(ComboBackend):
         def add_hotkey(self, key, callback, **kw):
             self.kw = kw
             return super().add_hotkey(key, callback)
     b = B()
     Toggle("ctrl+alt+s", lambda: None, backend=b).enable()
-    assert b.kw.get("trigger_on_release") is True
+    assert not b.kw.get("trigger_on_release")
+
+
+# --- left/right modifier keys ------------------------------------------------------------
+# The keyboard library names the LEFT modifier plainly ("ctrl") and the right one "right ctrl",
+# and its own read_hotkey() drops the side entirely. Capturing Right Ctrl therefore saved
+# "ctrl", which only matches the left key (manual test 24).
+
+import pytest
+
+from flowvoice.hotkey import key_matches, read_hotkey_by_side
+
+
+@pytest.mark.parametrize("configured,name,expected", [
+    ("right ctrl", "right ctrl", True),
+    ("right ctrl", "ctrl", False),
+    ("left ctrl", "ctrl", True),
+    ("left ctrl", "left ctrl", True),
+    ("left ctrl", "right ctrl", False),
+    ("ctrl", "ctrl", True),
+    ("ctrl", "right ctrl", True),
+    ("ctrl", "left ctrl", True),
+    ("right shift", "right shift", True),
+    ("left shift", "shift", True),
+    ("left shift", "right shift", False),
+    ("right alt", "right alt", True),
+    ("f9", "f9", True),
+    ("f9", "f10", False),
+    ("right ctrl", "c", False),
+])
+def test_key_matches_distinguishes_sides(configured, name, expected):
+    assert key_matches(configured, name) is expected
+
+
+def test_push_to_talk_on_left_ctrl_ignores_right_ctrl():
+    log = []
+    b = AnyBackend()
+    h = PushToTalk("left ctrl", lambda: log.append("start"), lambda: log.append("stop"),
+                   backend=b)
+    h.enable()
+    for kind, name in (("down", "right ctrl"), ("up", "right ctrl"),
+                       ("down", "ctrl"), ("up", "ctrl")):
+        h._on_event(SimpleNamespace(event_type=kind, name=name))
+    assert log == ["start", "stop"]
+
+
+def test_push_to_talk_on_either_ctrl_matches_both():
+    log = []
+    h = PushToTalk("ctrl", lambda: log.append("start"), lambda: log.append("stop"),
+                   backend=AnyBackend())
+    for kind, name in (("down", "ctrl"), ("up", "ctrl"), ("down", "right ctrl"),
+                       ("up", "right ctrl")):
+        h._on_event(SimpleNamespace(event_type=kind, name=name))
+    assert log == ["start", "stop", "start", "stop"]
+
+
+def _capture(*events):
+    """Run read_hotkey_by_side against scripted (event_type, name, scan_code) events."""
+    delivered = []
+
+    def hook(callback):
+        for kind, name, sc in events:
+            callback(SimpleNamespace(event_type=kind, name=name, scan_code=sc))
+        return "handle"
+
+    return read_hotkey_by_side(hook=hook, unhook=lambda h: delivered.append(h),
+                               get_hotkey_name=lambda names: "+".join(sorted(names))), delivered
+
+
+def test_capture_keeps_right_ctrl_as_right_ctrl():
+    result, unhooked = _capture(("down", "right ctrl", 57373), ("up", "right ctrl", 57373))
+    assert result == "right ctrl" and unhooked == ["handle"]
+
+
+def test_capture_names_the_plain_ctrl_event_as_left_ctrl():
+    result, _ = _capture(("down", "ctrl", 29), ("up", "ctrl", 29))
+    assert result == "left ctrl"
+
+
+def test_capture_other_single_keys_are_kept_as_is():
+    assert _capture(("down", "f9", 67), ("up", "f9", 67))[0] == "f9"
+    assert _capture(("down", "esc", 1), ("up", "esc", 1))[0] == "esc"
+    assert _capture(("down", "right shift", 54), ("up", "right shift", 54))[0] == "right shift"
+    assert _capture(("down", "shift", 42), ("up", "shift", 42))[0] == "left shift"
+
+
+def test_capture_combos_use_the_libraries_combo_naming():
+    result, _ = _capture(("down", "ctrl", 29), ("down", "alt", 56), ("down", "s", 31),
+                         ("up", "s", 31))
+    assert result == "alt+ctrl+s"  # fake get_hotkey_name sorts; real one orders modifiers first
+
+
+def test_capture_ignores_auto_repeat_before_release():
+    result, _ = _capture(("down", "right ctrl", 57373), ("down", "right ctrl", 57373),
+                         ("down", "right ctrl", 57373), ("up", "right ctrl", 57373))
+    assert result == "right ctrl"

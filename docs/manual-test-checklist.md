@@ -34,7 +34,7 @@ Run `run.bat`, wait for the speech model to load, and check each item. Mark pass
 
 ## Settings
 23. [ ] Live change: edit a phrase in the command table (for example change "comma" output) or the spoken-commands switch, Save. Expected: "Saved"; the app does not restart; the new behavior applies on the next dictation.
-24. [ ] Restart change: change the push-to-talk key (click the field, press new keys), Save. Expected: the app restarts and the new key works; the old one no longer does.
+24. [ ] Restart change: change the push-to-talk key (click the field, press new keys), Save. Expected: the app restarts and the new key works; the old one no longer does. Left and right modifier keys are captured separately: pressing Right Ctrl shows "Right Ctrl" and only the right key dictates; pressing the left one shows "Left Ctrl".
 25. [ ] Hotkey capture does not dictate: click the hotkey field and press Right Ctrl and other keys. Expected: no recording starts while capturing; dictation works again afterwards.
 26. [ ] UI size: drag Interface size to the maximum and press Save, then drag it back and press Save. Expected: the size changes only after Save; the window text and controls and the pill scale (range 0.8 to 1.6).
 27. [ ] Always show the pill off: Expected: the pill hides while idle and appears while recording.
@@ -45,4 +45,4 @@ Run `run.bat`, wait for the speech model to load, and check each item. Mark pass
 30. [ ] Close the window with the X. Expected: it hides; the pill and tray icon remain and dictation still works.
 31. [ ] Tray menu shows Open, Start dictation (Stop dictation while recording) and Quit. Start dictation records; Open shows the window.
 32. [ ] Quit from the tray. Expected: the tray icon and pill disappear and the process exits (no Flow Voice in Task Manager).
-33. [ ] Read aloud: select text in Notepad, press Ctrl+Alt+S. Expected: it speaks; pressing again stops.
+33. [ ] Read aloud: select text in Notepad, press Ctrl+Alt+S. Expected: it speaks; pressing again stops. With nothing selected you get a "Read aloud: select some text first" notice, and if the speech engine fails you get a "Read aloud failed: ..." notice instead of silence.

@@ -1,3 +1,4 @@
+import queue
 from typing import Callable
 
 import keyboard
@@ -6,12 +7,58 @@ _MODIFIERS = {"ctrl", "left ctrl", "right ctrl", "shift", "left shift", "right s
               "alt", "left alt", "right alt", "alt gr", "windows", "left windows",
               "right windows"}
 
+_SIDED = ("ctrl", "shift", "alt", "windows")
+
+
+def key_matches(configured: str, name: str) -> bool:
+    """Does a key event named `name` come from the `configured` key?
+
+    The keyboard library names the LEFT modifier plainly ("ctrl") and the right one
+    "right ctrl". So "left ctrl" matches the events "ctrl"/"left ctrl", "right ctrl" only
+    "right ctrl", and the side-less "ctrl" (older configs) matches either key.
+    """
+    if name == configured:
+        return True
+    for base in _SIDED:
+        if configured == f"left {base}":
+            return name == base
+        if configured == base:
+            return name in (f"left {base}", f"right {base}")
+    return False
+
+
+def read_hotkey_by_side(suppress: bool = False, *, hook=keyboard.hook,
+                        unhook=keyboard.unhook, get_hotkey_name=keyboard.get_hotkey_name) -> str:
+    """Like keyboard.read_hotkey, but a single modifier keeps its side.
+
+    read_hotkey() strips "left"/"right", so pressing Right Ctrl came back as "ctrl", which
+    matches the left key. A single key is returned by its own event name (the plain "ctrl"
+    event is the left key, so it becomes "left ctrl"); combos use the library's naming.
+    """
+    events: queue.Queue = queue.Queue()
+    handle = hook(events.put)
+    pressed: dict = {}
+    try:
+        while True:
+            event = events.get()
+            if event.event_type == "down":
+                pressed[event.scan_code] = event.name or str(event.scan_code)
+            else:
+                names = list(pressed.values()) or [event.name]
+                break
+    finally:
+        unhook(handle)
+    if len(names) == 1:
+        name = names[0]
+        return f"left {name}" if name in _SIDED else name
+    return get_hotkey_name(names)
+
 
 class PushToTalk:
     """Raw press/release/other-key events for `key`; TalkMode decides what they mean.
 
-    Callbacks run inside the keyboard hook: keep them fast. Only events whose name equals
-    `key` count (keyboard's hook_key also matches the left Ctrl for "right ctrl").
+    Callbacks run inside the keyboard hook: keep them fast. Only events from `key` count
+    (see key_matches: keyboard's hook_key also matches the left Ctrl for "right ctrl").
     `_held` tracks the physical key only, so auto-repeat never re-fires `on_press`.
     `on_other_key(name)` fires on any non-modifier key-down, whether or not `key` is held.
     """
@@ -36,7 +83,7 @@ class PushToTalk:
 
     def _is_ours(self, event) -> bool:
         name = getattr(event, "name", None)
-        return name is None or name == self._key
+        return name is None or key_matches(self._key, name)
 
     def _on_event(self, event) -> None:
         if not self._is_ours(event):
@@ -52,12 +99,12 @@ class PushToTalk:
     def _on_any(self, event) -> None:
         name = getattr(event, "name", None)
         if event.event_type == "down" and name is not None \
-                and name != self._key and name not in _MODIFIERS:
+                and not key_matches(self._key, name) and name not in _MODIFIERS:
             self._on_other_key(name)
 
 
 class Toggle:
-    """Fires `on_trigger` once per press. Single keys ignore auto-repeat; combos fire on release."""
+    """Fires `on_trigger` once per press. Single keys ignore auto-repeat; combos use add_hotkey."""
 
     def __init__(self, key: str, on_trigger: Callable[[], None], backend=keyboard):
         self._key, self._on_trigger = key, on_trigger
@@ -68,8 +115,7 @@ class Toggle:
 
     def enable(self) -> None:
         if self._combo:
-            self._handle = self._backend.add_hotkey(self._key, self._on_trigger,
-                                                    trigger_on_release=True)
+            self._handle = self._backend.add_hotkey(self._key, self._on_trigger)
         else:
             self._handle = self._backend.hook_key(self._key, self._on_event)
 

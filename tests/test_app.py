@@ -134,6 +134,13 @@ def test_engine_error_notifies_ui():
     assert ui.states[-1] == "idle"
 
 
+def test_tts_trigger_with_nothing_selected_says_so_instead_of_staying_silent():
+    app, _, ui, spk = make(selection="   ")
+    app.on_tts_trigger()
+    assert spk.said == []
+    assert any("select" in n.lower() for n in ui.notes)
+
+
 def test_tts_trigger_while_speaking_stops():
     app, _, _, spk = make()
     spk.speaking = True

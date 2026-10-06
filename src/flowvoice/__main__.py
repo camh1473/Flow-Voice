@@ -95,7 +95,7 @@ def main() -> int:
                     recorder.close()
                     return
                 state.recorder = recorder
-            app = App(state.cfg, engine=engine, recorder=recorder, speaker=Speaker(),
+            app = App(state.cfg, engine=engine, recorder=recorder, speaker=Speaker(on_error=shell.ui.notify),
                       ui=shell.ui, history=history)
 
             def read_aloud() -> None:

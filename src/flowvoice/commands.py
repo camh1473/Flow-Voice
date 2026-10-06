@@ -101,6 +101,14 @@ def _set_off(token: str) -> bool:
     return token != token.strip(_TOUCH_PUNCT)
 
 
+def _ends_clause(items: list[tuple[str, str]]) -> bool:
+    """True when nothing is emitted yet or the last item already ends in punctuation."""
+    if not items:
+        return True
+    last = items[-1][1].rstrip(" ")
+    return not last or last[-1] in _TOUCH_PUNCT + ":\n"
+
+
 def _converts(phrase, tokens, bare, i, n, in_address, next_is_command) -> bool:
     """Whether a matched phrase becomes its output here (guard rules)."""
     if phrase not in GUARDED:
@@ -173,7 +181,7 @@ def apply_commands(text: str, mapping: dict[str, str] = DEFAULT_COMMANDS) -> str
             caps = marker == _CAPS_ON
             last = tokens[i + n - 1]
             trail = last[len(last.rstrip(_TOUCH_PUNCT)):]
-            if trail:
+            if trail and not _ends_clause(items):
                 items.append(("attach", trail))
             changed = True
             i += n

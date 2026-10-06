@@ -13,8 +13,7 @@ dependencies = [
   "keyboard",
   "pyperclip",
   "pywin32",
-  "pystray",
-  "Pillow",
+  "PySide6",
 ]
 
 [project.optional-dependencies]

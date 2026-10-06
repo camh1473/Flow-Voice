@@ -14,7 +14,8 @@ class TalkMode:
     and a callback may call back in on its own thread. A short tap starts then cancels
     (never stops), so a brush of the key never transcribes. Silence only stops a latched
     take, and only after speech was heard; a latched take with no speech heard is
-    cancelled however it ends (press, click or the time cap).
+    cancelled when the time cap ends it. Ending it with a press or click keeps the take
+    unless it lasted under a second, because the level meter can miss a quiet voice.
     """
 
     def __init__(self, on_start: Callback, on_stop: Callback, on_cancel: Callback, *,
@@ -36,6 +37,7 @@ class TalkMode:
         self._floor_margin = floor_margin
         self._floor_rise = floor_rise_seconds
         self._settle = settle_seconds
+        self._manual_keep = 1.0
         self._floor = voice_threshold
         self._voice_time = 0.0
         self._last_level_at: Optional[float] = None
@@ -129,12 +131,20 @@ class TalkMode:
             return self._begin(now, "held")
         if self._state == "latched":
             self._last_tap_end = None
-            return self._end(self._latched_finish(), ignore_release=True)
+            return self._end(self._manual_finish(now), ignore_release=True)
         return None
 
     def _latched_finish(self) -> Callback:
         """A latched take with no speech heard is cancelled, never transcribed."""
         return self._on_stop if self._heard_speech else self._on_cancel
+
+    def _manual_finish(self, now: float) -> Callback:
+        """The user ended a latched take. The level meter can miss a quiet voice, so only a
+        take ended within a second (an accidental double press) is dropped; silence that
+        slips through transcribes to nothing and pastes nothing."""
+        if self._heard_speech or now - self._press_at >= self._manual_keep:
+            return self._on_stop
+        return self._on_cancel
 
     def _decide_release(self) -> Optional[Callback]:
         now = self._clock()
@@ -169,7 +179,7 @@ class TalkMode:
             self._last_tap_end = None
             return self._begin(now, "latched")
         if self._state == "latched":
-            return self._end(self._latched_finish())
+            return self._end(self._manual_finish(now))
         return None
 
     def _decide_tick(self) -> Optional[Callback]:

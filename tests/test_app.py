@@ -202,14 +202,23 @@ def test_double_tap_cycle_pastes_once():
     assert app.talk.state == "idle" and ui.states[-1] == "idle"
 
 
-def test_latched_take_with_no_speech_is_cancelled_not_transcribed():
+def test_quick_double_click_is_cancelled_not_transcribed():
+    clock = Clock()
+    app, pasted, ui, _ = make(clock=clock)
+    app.click()
+    clock.t += 0.4
+    app.click(); app.dictation.join()
+    assert pasted == [] and app.talk.state == "idle" and ui.states[-1] == "idle"
+    assert "processing" not in ui.states
+
+
+def test_manual_end_of_a_take_the_meter_thought_silent_is_still_transcribed():
     clock = Clock()
     app, pasted, ui, _ = make(clock=clock)
     app.click()
     clock.t += 3.0
     app.click(); app.dictation.join()
-    assert pasted == [] and app.talk.state == "idle" and ui.states[-1] == "idle"
-    assert "processing" not in ui.states
+    assert "processing" in ui.states and app.talk.state == "idle"
 
 
 def test_silence_stop_pastes():

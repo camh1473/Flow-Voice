@@ -176,36 +176,44 @@ def test_click_toggles_latched_recording():
     assert tm.state == "idle"
 
 
-def test_latched_press_with_no_speech_cancels():
+def test_latched_press_ends_with_stop_even_if_no_speech_was_detected():
+    # A quiet mic can look like "no speech"; a deliberate end must still keep the take.
     tm, clock, events = make()
     latch(tm, clock)
     tm.level(0.01)
     clock.advance(2.0)
     tm.press()
-    assert events == ["start", "cancel", "start", "cancel"]
+    assert events == ["start", "cancel", "start", "stop"]
     assert tm.state == "idle"
     clock.advance(0.1)
     tm.release()
-    assert events == ["start", "cancel", "start", "cancel"]
+    assert events == ["start", "cancel", "start", "stop"]
     assert tm.state == "idle"
 
 
-def test_latched_click_with_no_speech_cancels():
+def test_latched_click_ends_with_stop_even_if_no_speech_was_detected():
     tm, clock, events = make()
     latch(tm, clock)
     clock.advance(2.0)
     tm.click()
-    assert events == ["start", "cancel", "start", "cancel"]
+    assert events == ["start", "cancel", "start", "stop"]
     assert tm.state == "idle"
 
 
-def test_click_latch_then_click_with_no_speech_cancels():
+def test_click_latch_then_quick_second_click_is_cancelled():
+    tm, clock, events = make()
+    tm.click()
+    clock.advance(0.4)
+    tm.click()
+    assert events == ["start", "cancel"]
+
+
+def test_click_latch_then_click_after_a_while_stops():
     tm, clock, events = make()
     tm.click()
     clock.advance(1.0)
     tm.click()
-    assert events == ["start", "cancel"]
-
+    assert events == ["start", "stop"]
 
 def test_click_while_held_ignored():
     tm, clock, events = make()

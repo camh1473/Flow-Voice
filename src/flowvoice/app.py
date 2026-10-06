@@ -109,8 +109,10 @@ class App:
         self.ui.set_state("idle")
 
     def _paste_text(self, text: str) -> None:
-        if not self._recording:  # a newer take keeps its recording pill (non-activating)
-            self.ui.set_state("idle")  # hide the badge so it can never take focus from the paste
+        # A newer take keeps its recording pill and a queued one its processing pill (the
+        # pill is non-activating); otherwise hide the badge so it never takes the paste's focus.
+        if not self._recording and self.dictation.pending() <= 1:
+            self.ui.set_state("idle")
         with self._injection():
             self._paste(text)
 
@@ -143,4 +145,9 @@ class App:
         self.speaker.speak(text)
 
     def _on_done(self) -> None:
-        self.ui.set_state("recording" if self._recording else "idle")
+        if self._recording:
+            self.ui.set_state("recording")
+        elif self.dictation.pending() > 0:
+            self.ui.set_state("processing")
+        else:
+            self.ui.set_state("idle")

@@ -38,6 +38,35 @@ def test_space_only_text_not_pasted():
     assert out == []
 
 
+def test_pending_counts_queued_and_in_flight_items():
+    gate, entered = threading.Event(), threading.Event()
+    seen = []
+
+    def gated(audio):
+        entered.set()
+        gate.wait(5)
+        return "x"
+
+    holder = {}
+    d = Dictation(gated, lambda t: t, lambda t: None, lambda e: None,
+                  on_done=lambda: seen.append(holder["d"].pending()))
+    holder["d"] = d
+    assert d.pending() == 0
+    d.submit(np.ones(10, dtype=np.float32))
+    assert entered.wait(5)
+    d.submit(np.ones(10, dtype=np.float32))
+    d.submit(None)
+    assert d.pending() == 2
+    gate.set(); d.join()
+    assert seen == [1, 0] and d.pending() == 0
+
+
+def test_pending_drops_after_error():
+    d = Dictation(lambda a: 1 / 0, lambda t: t, lambda t: None, lambda e: None)
+    d.submit(np.ones(10, dtype=np.float32)); d.join()
+    assert d.pending() == 0
+
+
 def test_none_audio_ignored():
     out, err = [], []
     called = []

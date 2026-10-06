@@ -330,6 +330,22 @@ def test_paste_during_new_recording_keeps_recording_state():
     assert ui.states[-1] == "recording"
 
 
+def test_pill_stays_processing_while_queued_dictation_remains():
+    engine = GatedEngine()
+    ui = FakeUi()
+    at_paste = []
+    app = App(Config(), engine=engine, recorder=FakeRecorder(AUDIO), speaker=FakeSpeaker(),
+              ui=ui, paste=lambda t: at_paste.append(ui.states[-1]),
+              copy_selection=lambda: "", active_app=lambda: "")
+    app.on_ptt_start(); app.on_ptt_stop()  # A in flight
+    assert engine.entered.wait(5)
+    app.on_ptt_start(); app.on_ptt_stop()  # B queued behind A
+    mark = len(ui.states)
+    engine.gate.set(); app.dictation.join()
+    assert at_paste == ["processing", "idle"]  # idle only once the queue drains
+    assert ui.states[mark:] == ["processing", "idle", "idle"]
+
+
 def test_paste_when_not_recording_goes_idle_before_paste():
     events = []
     ui = FakeUi()

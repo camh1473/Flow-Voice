@@ -16,11 +16,20 @@ class Dictation:
         self._paste, self._on_error, self._on_done = paste, on_error, on_done
         self._on_result = on_result
         self._q: queue.Queue = queue.Queue()
+        self._lock = threading.Lock()
+        self._pending = 0
         threading.Thread(target=self._run, daemon=True).start()
 
     def submit(self, audio: np.ndarray | None, tag: object = None) -> None:
         if audio is not None:
+            with self._lock:
+                self._pending += 1
             self._q.put((audio, tag))
+
+    def pending(self) -> int:
+        """Items queued or in flight; inside on_done the finished item is excluded."""
+        with self._lock:
+            return self._pending
 
     def join(self, timeout: float = 5.0) -> None:
         done = threading.Event()
@@ -52,4 +61,6 @@ class Dictation:
             except Exception as e:
                 self._on_error(f"Dictation failed: {e}")
             finally:
+                with self._lock:
+                    self._pending -= 1
                 self._on_done()

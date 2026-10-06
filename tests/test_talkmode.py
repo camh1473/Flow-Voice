@@ -256,7 +256,7 @@ def test_max_seconds_without_speech():
     latch(tm, clock)
     clock.advance(301.0)
     tm.tick()
-    assert events[-1] == "stop"
+    assert events == ["start", "cancel", "start", "cancel"]
     assert tm.state == "idle"
 
 
@@ -298,15 +298,18 @@ def test_new_latch_resets_heard_speech():
     assert tm.state == "latched"
 
 
-def test_callback_may_reenter_without_deadlock():
+def test_callback_may_reenter_same_thread_without_deadlock():
+    # A callback calling back into TalkMode on its own thread must not deadlock.
     clock = Clock()
     events: list[str] = []
     holder: dict = {}
 
     def on_start():
-        holder["tm"].level(0.9)
-        holder["tm"].tick()
-        events.append(f"start:{holder['tm'].state}")
+        tm = holder["tm"]
+        tm.level(0.9)
+        tm.tick()
+        events.append(f"start:{tm.state}")
+        tm.click()
 
     tm = TalkMode(on_start, lambda: events.append("stop"), lambda: events.append("cancel"),
                   clock=clock)
@@ -319,4 +322,50 @@ def test_callback_may_reenter_without_deadlock():
 
     threading.Thread(target=run, daemon=True).start()
     assert done.wait(2.0)
-    assert events == ["start:latched"]
+    assert events == ["start:latched", "stop"]
+    assert tm.state == "idle"
+
+
+def _gated(events, gate, entered):
+    def on_start():
+        entered.set()
+        gate.wait(2.0)
+        events.append("start")
+    return on_start
+
+
+def _race(second_call):
+    """Thread A's click blocks inside on_start; thread B acts meanwhile."""
+    events: list[str] = []
+    gate, entered = threading.Event(), threading.Event()
+    clock = Clock()
+    tm = TalkMode(_gated(events, gate, entered), lambda: events.append("stop"),
+                  lambda: events.append("cancel"), clock=clock)
+    a = threading.Thread(target=tm.click, daemon=True)
+    a.start()
+    assert entered.wait(2.0)
+    b = threading.Thread(target=lambda: second_call(tm), daemon=True)
+    b.start()
+    b.join(0.2)
+    blocked = b.is_alive()
+    early = list(events)
+    gate.set()
+    a.join(2.0)
+    b.join(2.0)
+    return blocked, early, events, tm
+
+
+def test_cross_thread_click_waits_for_pending_start():
+    blocked, early, events, tm = _race(lambda tm: tm.click())
+    assert blocked
+    assert early == []
+    assert events == ["start", "stop"]
+    assert tm.state == "idle"
+
+
+def test_cross_thread_press_waits_for_pending_start():
+    blocked, early, events, tm = _race(lambda tm: tm.press())
+    assert blocked
+    assert early == []
+    assert events == ["start", "stop"]
+    assert tm.state == "idle"

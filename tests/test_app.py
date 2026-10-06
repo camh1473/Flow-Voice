@@ -463,3 +463,204 @@ def test_on_level_never_raises_into_audio_thread():
 
     ui.set_level = boom
     app.on_level(0.5)
+
+
+class PromptEngine:
+    """Records the initial_prompt of every transcribe call."""
+
+    def __init__(self, text="um hello"):
+        self.text = text
+        self.prompts = []
+
+    def transcribe(self, audio, initial_prompt=None):
+        self.prompts.append(initial_prompt)
+        return self.text
+
+
+class FakeAi:
+    def __init__(self, result=None, error=None, status="off"):
+        self.result, self.error, self.status = result, error, status
+        self.configured, self.calls = [], []
+
+    def configure(self, cfg):
+        self.configured.append(cfg)
+
+    def polish(self, text, cfg):
+        self.calls.append(text)
+        if self.error is not None:
+            raise self.error
+        return self.result
+
+
+def make_ai(engine=None, ai=None, config=None, history=None, clock=None):
+    pasted, ui = [], FakeUi()
+    kwargs = {"clock": clock} if clock is not None else {}
+    app = App(config or Config(), engine=engine or PromptEngine(), recorder=FakeRecorder(AUDIO),
+              speaker=FakeSpeaker(), ui=ui, history=history, paste=pasted.append,
+              copy_selection=lambda: "", active_app=lambda: "notepad.exe", ai=ai, **kwargs)
+    return app, pasted, ui
+
+
+def take(app):
+    app.on_ptt_start(); app.on_ptt_stop(); app.dictation.join()
+
+
+def test_no_terms_calls_engine_without_prompt():
+    engine = PromptEngine()
+    app, pasted, _ = make_ai(engine=engine)
+    take(app)
+    assert engine.prompts == [None] and pasted == ["Hello"]
+
+
+def test_old_engine_without_prompt_kwarg_still_works():
+    app, pasted, ui, _ = make(engine=FakeEngine(), config=Config(dictionary_terms=[]))
+    take(app)
+    assert pasted == ["Hello"] and ui.notes == []
+
+
+def test_glossary_passed_live_and_updated_after_apply_config():
+    engine = PromptEngine()
+    app, pasted, _ = make_ai(engine=engine, config=Config(dictionary_terms=["TBB", "Perry"]))
+    take(app)
+    app.apply_config(Config(dictionary_terms=["Ollama"]))
+    take(app)
+    app.apply_config(Config())
+    take(app)
+    assert engine.prompts == ["Glossary: TBB, Perry.", "Glossary: Ollama.", None]
+    assert pasted == ["Hello"] * 3
+
+
+def test_glossary_echo_pastes_nothing():
+    hist = FakeHistory()
+    engine = PromptEngine(text="Glossary: TBB, Perry.")
+    app, pasted, ui = make_ai(engine=engine, config=Config(dictionary_terms=["TBB", "Perry"]),
+                              history=hist)
+    take(app)
+    assert pasted == [] and hist.added == [] and ui.entries == [] and ui.states[-1] == "idle"
+    engine.text = "TBB"  # a single term said alone is real dictation
+    take(app)
+    assert pasted == ["TBB"]
+
+
+def test_snippet_expands_in_pasted_text_and_history_keeps_raw():
+    hist = FakeHistory()
+    cfg = Config(snippets={"my email": "cam@example.com"})
+    app, pasted, ui = make_ai(engine=PromptEngine(text="um send it to my email."), config=cfg,
+                              history=hist)
+    take(app)
+    assert pasted == ["Send it to cam@example.com"]
+    assert hist.added == [("um send it to my email.", "Send it to cam@example.com", "notepad.exe")]
+    assert ui.entries[-1].raw_text == "um send it to my email."
+    assert ui.entries[-1].clean_text == "Send it to cam@example.com"
+
+
+def test_lists_dictionary_and_commands_in_pasted_text():
+    engine = PromptEngine(text="tbb needs 1. milk 2. eggs 3. bread")
+    app, pasted, _ = make_ai(engine=engine, config=Config(dictionary_terms=["TBB"]))
+    take(app)
+    assert pasted == ["TBB needs:\n1. Milk\n2. Eggs\n3. Bread"]
+    app.apply_config(Config(dictionary_terms=["TBB"], auto_lists=False))
+    take(app)
+    assert pasted[-1] == "TBB needs 1. Milk 2. Eggs 3. Bread"  # lists off: one line
+    engine.text = "hello comma new line world"
+    take(app)
+    assert pasted[-1] == "Hello,\nWorld"
+
+
+def test_ai_polish_result_pasted_when_returned():
+    hist = FakeHistory()
+    ai = FakeAi(result="Polished text")
+    app, pasted, _ = make_ai(ai=ai, config=Config(ai_enabled=True), history=hist)
+    take(app)
+    assert ai.calls == ["Hello"] and pasted == ["Polished text"]
+    assert hist.added == [("um hello", "Polished text", "notepad.exe")]
+
+
+def test_ai_none_keeps_rule_text():
+    ai = FakeAi(result=None)
+    app, pasted, _ = make_ai(ai=ai, config=Config(ai_enabled=True))
+    take(app)
+    assert ai.calls == ["Hello"] and pasted == ["Hello"]
+
+
+def test_ai_raising_keeps_paste_and_worker_alive():
+    ai = FakeAi(error=RuntimeError("model crashed"))
+    app, pasted, ui = make_ai(ai=ai, config=Config(ai_enabled=True))
+    take(app); take(app)
+    assert pasted == ["Hello", "Hello"] and len(ai.calls) == 2
+    assert ui.states[-1] == "idle" and ui.notes == []
+
+
+def test_ai_disabled_never_polishes():
+    ai = FakeAi(result="Polished text")
+    app, pasted, _ = make_ai(ai=ai, config=Config(ai_enabled=False))
+    take(app)
+    assert ai.calls == [] and pasted == ["Hello"]
+
+
+def test_ai_configured_at_construction_and_on_apply_config():
+    ai = FakeAi()
+    first = Config()
+    app, _, _ = make_ai(ai=ai, config=first)
+    assert len(ai.configured) == 1 and ai.configured[0] is first
+    new = Config(ai_enabled=True)
+    app.apply_config(new)
+    assert len(ai.configured) == 2 and ai.configured[1] is new and app.config is new
+
+
+def test_disabled_ai_never_retries_configure():
+    clock = Clock()
+    ai = FakeAi(status="unavailable")
+    app, pasted, _ = make_ai(ai=ai, config=Config(ai_enabled=False), clock=clock)
+    clock.t += 120.0
+    take(app)
+    clock.t += 120.0
+    take(app)
+    assert len(ai.configured) == 1 and pasted == ["Hello", "Hello"]
+
+
+def test_unavailable_ai_retries_configure_at_most_every_60_seconds():
+    clock = Clock()
+    ai = FakeAi(status="unavailable")
+    cfg = Config(ai_enabled=True)
+    app, pasted, _ = make_ai(ai=ai, config=cfg, clock=clock)
+    assert len(ai.configured) == 1
+    take(app)  # the constructor just attempted
+    assert len(ai.configured) == 1
+    clock.t += 61.0
+    take(app)
+    assert len(ai.configured) == 2 and ai.configured[-1] is cfg
+    clock.t += 30.0
+    take(app)
+    assert len(ai.configured) == 2
+    ai.status = "missing model"
+    clock.t += 31.0
+    take(app)
+    assert len(ai.configured) == 3
+    assert pasted == ["Hello"] * 4
+
+
+def test_ready_or_warming_ai_never_retries():
+    clock = Clock()
+    ai = FakeAi(status="ready")
+    app, _, _ = make_ai(ai=ai, config=Config(ai_enabled=True), clock=clock)
+    clock.t += 120.0
+    take(app)
+    ai.status = "warming"
+    clock.t += 120.0
+    take(app)
+    assert len(ai.configured) == 1
+
+
+def test_retry_configure_raising_does_not_break_paste():
+    clock = Clock()
+    ai = FakeAi(status="unavailable")
+    app, pasted, ui = make_ai(ai=ai, config=Config(ai_enabled=True), clock=clock)
+
+    def boom(cfg):
+        raise RuntimeError("thread start failed")
+
+    ai.configure = boom
+    clock.t += 61.0
+    take(app); take(app)
+    assert pasted == ["Hello", "Hello"] and ui.notes == []

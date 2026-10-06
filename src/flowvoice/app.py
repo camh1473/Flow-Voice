@@ -3,14 +3,18 @@ import time
 from contextlib import contextmanager
 from datetime import datetime
 
-from flowvoice.cleanup import clean
+from flowvoice.ai_polish import MISSING, UNAVAILABLE, AiService
 from flowvoice.config import Config
 from flowvoice.history import History, HistoryEntry, active_app_name
 from flowvoice.inject import copy_selection as _copy_selection
 from flowvoice.inject import paste_text
 from flowvoice.pipeline import Dictation
+from flowvoice.postprocess import Postprocessor
 from flowvoice.talkmode import TalkMode
 from flowvoice.ui_api import Ui
+from flowvoice.vocabulary import is_glossary_echo
+
+AI_RETRY_SECONDS = 60.0
 
 
 class App:
@@ -19,8 +23,13 @@ class App:
     def __init__(self, config: Config, *, engine, recorder, speaker, ui: Ui,
                  history: History | None = None, paste=paste_text,
                  copy_selection=_copy_selection, active_app=active_app_name,
-                 clock=time.monotonic):
+                 clock=time.monotonic, ai: AiService | None = None):
         self.config = config
+        self.engine = engine
+        self.ai = ai
+        self._post = Postprocessor(ai)
+        self._clock = clock
+        self._last_ai_retry = clock()
         self.recorder = recorder
         self.speaker = speaker
         self.ui = ui
@@ -33,13 +42,15 @@ class App:
         self._inject_lock = threading.Lock()
         self._injecting = 0  # read lock-free by the hook thread
         self._history_failed = False
-        self.dictation = Dictation(engine.transcribe, self._clean, self._paste_text,
+        self.dictation = Dictation(self._transcribe, self._clean, self._paste_text,
                                    on_error=ui.notify, on_done=self._on_done,
                                    on_result=self._on_result)
         self.talk = TalkMode(self.on_ptt_start, self.on_ptt_stop, self.on_ptt_cancel,
                              clock=clock, hands_free=config.hands_free,
                              silence_stop_seconds=config.silence_stop_seconds)
         recorder.on_level = self.on_level
+        if ai is not None:
+            ai.configure(config)
 
     def press(self) -> None:
         self.talk.press()
@@ -83,6 +94,9 @@ class App:
         self.config = cfg
         self.talk.hands_free = cfg.hands_free
         self.talk.silence_stop_seconds = cfg.silence_stop_seconds
+        if self.ai is not None:
+            self._last_ai_retry = self._clock()
+            self.ai.configure(cfg)
 
     def on_ptt_start(self) -> None:
         self._recording = True
@@ -99,10 +113,33 @@ class App:
         self.ui.set_state("processing")
         self.dictation.submit(audio, self._tag)
 
+    def _transcribe(self, audio) -> str:
+        """Whisper with the live glossary prompt; a transcript that only echoes it is dropped."""
+        cfg = self.config
+        prompt = self._post.glossary(cfg)
+        if prompt is None:
+            return self.engine.transcribe(audio)
+        text = self.engine.transcribe(audio, initial_prompt=prompt)
+        return "" if is_glossary_echo(text, cfg.dictionary_terms) else text
+
+    def _retry_ai(self, cfg: Config) -> None:
+        """Restart a failed AI warm-up at most once a minute; never raises, never waits."""
+        try:
+            ai = self.ai
+            if ai is None or not cfg.ai_enabled or ai.status not in (UNAVAILABLE, MISSING):
+                return
+            now = self._clock()
+            if now - self._last_ai_retry < AI_RETRY_SECONDS:
+                return
+            self._last_ai_retry = now
+            ai.configure(cfg)
+        except Exception:
+            pass
+
     def _clean(self, text: str) -> str:
         cfg = self.config
-        return clean(text, fillers=cfg.filler_phrases, backtracks=cfg.backtrack_phrases,
-                     commands=cfg.command_phrases if cfg.voice_commands else None)
+        self._retry_ai(cfg)
+        return self._post.process(text, cfg)
 
     def on_ptt_cancel(self) -> None:
         self._recording = False

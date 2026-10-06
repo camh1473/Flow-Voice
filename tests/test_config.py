@@ -107,3 +107,78 @@ def test_phrase_lists_not_shared_between_instances():
     a, b = Config(), Config()
     a.filler_phrases.append("zzz")
     assert "zzz" not in b.filler_phrases
+
+
+def test_v3_defaults():
+    c = Config()
+    assert c.dictionary_terms == [] and c.dictionary_fixes == {} and c.snippets == {}
+    assert c.auto_lists is True and c.ai_enabled is False
+    assert c.ai_model == "qwen3.5:2b-q4_K_M"
+    assert c.ai_min_words == 20 and c.ai_timeout_seconds == 6.0
+    assert c.ai_url == "http://localhost:11434"
+
+
+def test_v3_roundtrip(tmp_path):
+    p = tmp_path / "c.json"
+    cfg = Config(dictionary_terms=["Kubernetes"], dictionary_fixes={"cube ctl": "kubectl"},
+                 snippets={"my email": "a@b.co"}, auto_lists=False, ai_enabled=True,
+                 ai_model="m:1b", ai_min_words=30, ai_timeout_seconds=9.5,
+                 ai_url="http://127.0.0.1:11434")
+    save_config(cfg, p)
+    assert load_config(p) == cfg
+
+
+def test_v3_bad_types_fall_back_per_field(tmp_path):
+    p = tmp_path / "c.json"
+    p.write_text(json.dumps({
+        "dictionary_terms": "nope", "dictionary_fixes": {"a": 1}, "snippets": {"a": 2},
+        "ai_min_words": "x", "ai_enabled": "yes", "auto_lists": 1, "ai_model": 5,
+        "ai_url": None, "ai_timeout_seconds": "fast", "ptt_key": "f8"}))
+    c = load_config(p)
+    d = Config()
+    assert c.dictionary_terms == d.dictionary_terms
+    assert c.dictionary_fixes == d.dictionary_fixes and c.snippets == d.snippets
+    assert c.ai_min_words == 20 and c.ai_enabled is False and c.auto_lists is True
+    assert c.ai_model == d.ai_model and c.ai_url == d.ai_url
+    assert c.ai_timeout_seconds == 6.0
+    assert c.ptt_key == "f8"
+
+
+def test_ai_min_words_clamped_and_int(tmp_path):
+    p = tmp_path / "c.json"
+    p.write_text(json.dumps({"ai_min_words": 2}))
+    assert load_config(p).ai_min_words == 5
+    p.write_text(json.dumps({"ai_min_words": 20.7}))
+    c = load_config(p)
+    assert c.ai_min_words == 20 and isinstance(c.ai_min_words, int)
+    p.write_text(json.dumps({"ai_min_words": True}))
+    assert load_config(p).ai_min_words == 20
+
+
+def test_ai_timeout_clamped(tmp_path):
+    p = tmp_path / "c.json"
+    p.write_text(json.dumps({"ai_timeout_seconds": 0.1}))
+    assert load_config(p).ai_timeout_seconds == 1.0
+    p.write_text(json.dumps({"ai_timeout_seconds": 999}))
+    c = load_config(p)
+    assert c.ai_timeout_seconds == 60.0 and isinstance(c.ai_timeout_seconds, float)
+
+
+def test_collections_truncated_on_load(tmp_path):
+    p = tmp_path / "c.json"
+    p.write_text(json.dumps({
+        "dictionary_terms": [f"t{i}" for i in range(250)],
+        "dictionary_fixes": {f"f{i}": "x" for i in range(250)},
+        "snippets": {f"s{i}": "x" for i in range(150)}}))
+    c = load_config(p)
+    assert c.dictionary_terms == [f"t{i}" for i in range(200)]
+    assert list(c.dictionary_fixes) == [f"f{i}" for i in range(200)]
+    assert list(c.snippets) == [f"s{i}" for i in range(100)]
+
+
+def test_v3_collections_not_shared_between_instances():
+    a, b = Config(), Config()
+    a.dictionary_terms.append("zzz")
+    a.dictionary_fixes["z"] = "y"
+    a.snippets["z"] = "y"
+    assert b.dictionary_terms == [] and b.dictionary_fixes == {} and b.snippets == {}

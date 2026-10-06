@@ -1,4 +1,5 @@
 import json
+import math
 import os
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
@@ -23,9 +24,21 @@ class Config:
     save_history: bool = True
     pill_always_visible: bool = True
     ui_scale: float = 1.0
+    dictionary_terms: list[str] = field(default_factory=list)
+    dictionary_fixes: dict[str, str] = field(default_factory=dict)
+    snippets: dict[str, str] = field(default_factory=dict)
+    auto_lists: bool = True
+    ai_enabled: bool = False
+    ai_model: str = "qwen3.5:2b-q4_K_M"
+    ai_min_words: int = 20
+    ai_timeout_seconds: float = 6.0
+    ai_url: str = "http://localhost:11434"
 
 
 UI_SCALE_MIN, UI_SCALE_MAX = 0.8, 1.6
+MAX_TERMS, MAX_FIXES, MAX_SNIPPETS = 200, 200, 100
+AI_MIN_WORDS_MIN = 5
+AI_TIMEOUT_RANGE = (1.0, 60.0)
 SILENCE_STOP_MIN = 0.5  # a hand-edited 0 must not end a take right after the first word
 
 
@@ -34,20 +47,20 @@ def _is_num(v) -> bool:
 
 
 def _valid(name: str, v) -> bool:
-    if name in ("ptt_key", "tts_key", "model"):
+    if name in ("ptt_key", "tts_key", "model", "ai_model", "ai_url"):
         return isinstance(v, str)
     if name == "mic_device":
         return v is None or (isinstance(v, int) and not isinstance(v, bool))
     if name in ("start_with_windows", "voice_commands", "hands_free",
-                "save_history", "pill_always_visible"):
+                "save_history", "pill_always_visible", "auto_lists", "ai_enabled"):
         return isinstance(v, bool)
-    if name in ("filler_phrases", "backtrack_phrases"):
+    if name in ("filler_phrases", "backtrack_phrases", "dictionary_terms"):
         return isinstance(v, list) and all(isinstance(x, str) for x in v)
-    if name == "command_phrases":
+    if name in ("command_phrases", "dictionary_fixes", "snippets"):
         return isinstance(v, dict) and all(
             isinstance(k, str) and isinstance(x, str) for k, x in v.items())
-    if name in ("silence_stop_seconds", "ui_scale"):
-        return _is_num(v)
+    if name in ("silence_stop_seconds", "ui_scale", "ai_min_words", "ai_timeout_seconds"):
+        return _is_num(v) and math.isfinite(v)
     return True
 
 
@@ -66,6 +79,17 @@ def load_config(path: Path | None = None) -> Config:
         if "silence_stop_seconds" in kwargs:
             kwargs["silence_stop_seconds"] = float(
                 max(SILENCE_STOP_MIN, kwargs["silence_stop_seconds"]))
+        if "ai_min_words" in kwargs:
+            kwargs["ai_min_words"] = max(AI_MIN_WORDS_MIN, int(kwargs["ai_min_words"]))
+        if "ai_timeout_seconds" in kwargs:
+            lo, hi = AI_TIMEOUT_RANGE
+            kwargs["ai_timeout_seconds"] = float(min(hi, max(lo, kwargs["ai_timeout_seconds"])))
+        if "dictionary_terms" in kwargs:
+            kwargs["dictionary_terms"] = kwargs["dictionary_terms"][:MAX_TERMS]
+        if "dictionary_fixes" in kwargs:
+            kwargs["dictionary_fixes"] = dict(list(kwargs["dictionary_fixes"].items())[:MAX_FIXES])
+        if "snippets" in kwargs:
+            kwargs["snippets"] = dict(list(kwargs["snippets"].items())[:MAX_SNIPPETS])
         return Config(**kwargs)
     except Exception:
         return Config()

@@ -40,3 +40,48 @@ def test_custom_backtrack_and_filler_lists():
     assert clean("Keep this. Drop me. Oops.", backtracks=["oops"]) == "Keep this."
     assert clean("It is, like, fine.", fillers=["like"]) == "It is fine."
     assert clean("Scratch that. Hi", backtracks=[]) == "Scratch that. Hi"
+
+
+from flowvoice.commands import DEFAULT_COMMANDS
+
+
+@pytest.mark.parametrize("raw,expected", [
+    ("hello new line world", "Hello\nWorld"),
+    ("hello new paragraph world", "Hello\n\nWorld"),
+    ("yes new line yes", "Yes\nYes"),
+    ("hello comma how are you question mark", "Hello, how are you?"),
+    ("john at sign gmail dot com", "john@gmail.com"),
+    ("the time period is long", "The time period is long"),
+    ("Hi. Send it to Bob comma. Scratch that. Send it to Alice.", "Hi. Send it to Alice."),
+])
+def test_clean_with_commands(raw, expected):
+    assert clean(raw, commands=DEFAULT_COMMANDS) == expected
+
+
+def test_commands_off_by_default():
+    assert clean("hello new line world") == "Hello new line world"
+    assert clean("hello new line world", commands=None) == "Hello new line world"
+
+
+def test_line_breaks_survive_whitespace_steps():
+    assert clean("one  \n  two\t\tthree") == "One\nTwo three"
+    assert clean("hello\nyes yes") == "Hello\nYes"
+    assert clean("yes\nyes") == "Yes\nYes"
+
+
+def test_bullet_marker_not_capitalized():
+    assert clean("- apples") == "- apples"
+    assert clean("list\n- apples\n- pears") == "List\n- apples\n- pears"
+
+
+def test_address_like_tokens_not_capitalized():
+    assert clean("see\nwww.example.com now") == "See\nwww.example.com now"
+    assert clean("go to\n/tmp/x") == "Go to\n/tmp/x"
+    assert clean("mail\nbob@x.com") == "Mail\nbob@x.com"
+
+
+def test_command_input_with_real_newline_documented():
+    # apply_commands splits on whitespace, so a pre-existing newline in its
+    # input is collapsed once any command fires; the command's own break stays.
+    out = clean("first line\nsecond new line third", commands=DEFAULT_COMMANDS)
+    assert out == "First line second\nThird"

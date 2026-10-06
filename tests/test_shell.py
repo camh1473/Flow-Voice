@@ -5,7 +5,7 @@ from PySide6.QtCore import QCoreApplication, QPoint, QSettings, Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QWidget
 
-from flowvoice.__main__ import AiProbe, ai_status_handler, ai_toast, make_ai_service
+from flowvoice.__main__ import AiProbe, ai_status_handler, ai_toast, make_ai_service, make_on_save
 from flowvoice.config import Config
 from flowvoice.history import HistoryEntry
 from flowvoice.ui import shell as shell_mod
@@ -580,3 +580,41 @@ def test_ai_enabled_at_startup_warms_once_and_reports_status():
     ai.configure(cfg)  # App(ai=...) configures again with the same config: no second warm-up
     assert log == ["thread"]
     assert ui.statuses == [("warming", "")]
+
+
+class MissingModelClient:
+    def has_model(self):
+        return False
+
+
+def _save_harness(save=lambda c: None):
+    from types import SimpleNamespace
+    ui = FakeUi()
+    state = SimpleNamespace(cfg=Config(), ai_enabled=False)
+    ai = make_ai_service(lambda: ui, lambda: state.ai_enabled,
+                         client_factory=lambda cfg: MissingModelClient(), ensure=lambda c: True,
+                         start_thread=lambda target: target())
+
+    def apply(old, new):
+        return apply_saved_config(old, new, save=save, app=None, apply_ui=lambda c: None,
+                                  restart=lambda: None, notify=ui.notify, ai=ai)
+
+    return ui, state, make_on_save(state, apply)
+
+
+def test_enabling_ai_with_instant_warmup_failure_toasts_once():
+    ui, state, on_save = _save_harness()
+    new = Config(ai_enabled=True, ai_model="m:1b")
+    on_save(new)
+    assert ui.messages == ["AI model not installed. Run: ollama pull m:1b", "Settings saved"]
+    assert state.cfg is new and state.ai_enabled is True
+
+
+def test_failed_save_restores_ai_enabled_flag():
+    def boom(cfg):
+        raise OSError("disk full")
+
+    ui, state, on_save = _save_harness(save=boom)
+    old = state.cfg
+    on_save(Config(ai_enabled=True))
+    assert state.cfg is old and state.ai_enabled is False

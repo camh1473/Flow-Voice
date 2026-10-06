@@ -77,6 +77,24 @@ def make_ai_service(get_ui: Callable[[], object], is_enabled: Callable[[], bool]
     return AiService(on_status=ai_status_handler(get_ui, is_enabled), **kwargs)
 
 
+def make_on_save(state, apply: Callable[[object, object], str]) -> Callable[[object], None]:
+    """Settings save handler; `state.cfg` stays the old config until the save applied live.
+
+    `state.ai_enabled` (read by the AI toast handler) is set before applying, because the AI
+    warm-up started by `apply` can report a failure before `apply` returns.
+    """
+
+    def on_save(new) -> None:
+        state.ai_enabled = new.ai_enabled
+        result = apply(state.cfg, new)
+        if result == "live":
+            state.cfg = new
+        elif result == "failed":
+            state.ai_enabled = state.cfg.ai_enabled
+
+    return on_save
+
+
 class AiProbe:
     """What Settings may ask of the AI service: list models and run a test. Never starts Ollama."""
 
@@ -100,10 +118,11 @@ def main() -> int:
         autostart_error = e
     history = _open_history()
     hooks = HookGroup()
-    state = SimpleNamespace(cfg=cfg, app=None, recorder=None, lock=threading.Lock())
+    state = SimpleNamespace(cfg=cfg, ai_enabled=cfg.ai_enabled, app=None, recorder=None,
+                            lock=threading.Lock())
 
     # Quitting never stops Ollama (the user may run it for other things); AI threads are daemons.
-    ai = make_ai_service(lambda: shell.ui, lambda: state.cfg.ai_enabled)
+    ai = make_ai_service(lambda: shell.ui, lambda: state.ai_enabled)
     shell = Shell(cfg, history, mics=mic_choices(), first_run=first_run, ai_probe=AiProbe(ai))
     ai.configure(state.cfg)  # warm up alongside the speech model; a no-op with AI off
 
@@ -123,15 +142,13 @@ def main() -> int:
                         spawn=lambda: subprocess.Popen([sys.executable, "-m", "flowvoice"]),
                         exit=lambda: os._exit(0), notify=shell.ui.notify)
 
-    def on_save(new) -> None:
-        result = apply_saved_config(state.cfg, new, save=save_config, app=state.app,
-                                    apply_ui=shell.apply_config, restart=restart,
-                                    notify=shell.ui.notify, ai=ai)
-        if result == "live":
-            state.cfg = new
+    def apply_settings(old, new) -> str:
+        return apply_saved_config(old, new, save=save_config, app=state.app,
+                                  apply_ui=shell.apply_config, restart=restart,
+                                  notify=shell.ui.notify, ai=ai)
 
     shell.on_quit = stop_input
-    shell.on_save_config = on_save
+    shell.on_save_config = make_on_save(state, apply_settings)
     wire_capture(shell.window, hooks, lambda: state.app)
     if history is None:
         shell.ui.notify("History unavailable")

@@ -57,7 +57,6 @@ class Postprocessor:
             if isinstance(polished, str) and polished.strip():
                 out = polished
         try:
-            out = expand_snippets(out, mapping)
+            return expand_snippets(out, mapping)
         except Exception:
-            out = _strip_leaks(out, mapping)
-        return _strip_leaks(out, mapping)
+            return _strip_leaks(out, mapping)

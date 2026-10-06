@@ -219,22 +219,25 @@ def test_failing_clean_propagates(monkeypatch):
         Postprocessor().process("hello", make_cfg())
 
 
-def test_failing_expand_never_leaks_placeholder(monkeypatch):
+def test_failing_expand_strips_placeholders_keeps_text(monkeypatch):
     def boom(*a, **k):
         raise ValueError("bad")
 
     monkeypatch.setattr(postprocess, "expand_snippets", boom)
-    out = Postprocessor().process("hello my linkedin", make_cfg())
-    assert not any(0xE000 <= ord(c) <= 0xF8FF for c in out)
+    assert Postprocessor().process("hello my linkedin", make_cfg()) == "Hello "
 
 
-def test_leftover_placeholder_char_removed(monkeypatch):
-    ph = chr(0xE100)
-    monkeypatch.setattr(postprocess, "expand_snippets", lambda text, mapping: text)
-    out = Postprocessor().process("hello my linkedin", make_cfg())
-    assert ph not in out
-    assert out.startswith("Hello")
+def test_foreign_private_use_char_in_snippet_kept_verbatim():
+    foreign = chr(0xE100)
+    cfg = Config(snippets={"my site": "a" + foreign + "b", "sig": "S"})
+    assert Postprocessor().process("sig my site", cfg) == "S a" + foreign + "b"
 
+
+def test_two_snippets_one_containing_others_placeholder():
+    foreign = chr(0xE101)
+    cfg = Config(snippets={"my site": "a" + foreign + "b", "sig": "S"})
+    out = Postprocessor().process("my site then sig", cfg)
+    assert out == "a" + foreign + "b then S"
 
 def test_keyboard_interrupt_propagates():
     ai = FakeAi(error=KeyboardInterrupt())

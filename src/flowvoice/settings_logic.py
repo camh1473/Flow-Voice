@@ -49,7 +49,62 @@ def rows_to_commands(rows: list[tuple[str, str]]) -> dict[str, str]:
     return commands
 
 
-def mic_choices() -> list[tuple[str, int | None]]:
+def _row_key(key: str, lower_keys: bool) -> str:
+    key = key.strip()
+    return key.lower() if lower_keys else key
+
+
+def rows_to_dict(rows: list[tuple[str, str]], *, lower_keys: bool, limit: int) -> dict[str, str]:
+    """Table rows -> mapping: keys trimmed (and lowercased if asked), blanks dropped, values
+    unescaped but not trimmed, later rows win, first `limit` distinct keys kept."""
+    out: dict[str, str] = {}
+    for key, value in rows:
+        k = _row_key(key, lower_keys)
+        if not k:
+            continue
+        if k not in out and len(out) >= limit:
+            continue
+        out[k] = unescape_text(value)
+    return out
+
+
+def rows_duplicates(rows: list[tuple[str, str]], *, lower_keys: bool) -> list[str]:
+    """Distinct keys used by more than one non-blank row, in first-seen order."""
+    counts: dict[str, int] = {}
+    for key, _ in rows:
+        k = _row_key(key, lower_keys)
+        if k:
+            counts[k] = counts.get(k, 0) + 1
+    return [k for k, n in counts.items() if n > 1]
+
+
+def snippet_warnings(snippets: dict[str, str], command_phrases: dict[str, str]) -> list[str]:
+    """One-line warnings for snippets that collide with a command, are too short, or are empty."""
+    commands = {" ".join(p.lower().split()) for p in command_phrases}
+    out: list[str] = []
+    for trigger, text in snippets.items():
+        if " ".join(trigger.lower().split()) in commands:
+            out.append(f'"{trigger}" is also a spoken command; the snippet wins.')
+        if len(trigger) < 3:
+            out.append(f'"{trigger}" is shorter than 3 characters and may fire by accident.')
+        if not text.strip():
+            out.append(f'The snippet "{trigger}" is empty.')
+    return out
+
+
+def terms_from_text(text: str, limit: int = 200) -> list[str]:
+    """One term per line; trimmed, blanks dropped, case-insensitive de-dupe keeping the first."""
+    seen: set[str] = set()
+    terms: list[str] = []
+    for line in text.splitlines():
+        term = line.strip()
+        if term and term.lower() not in seen:
+            seen.add(term.lower())
+            terms.append(term)
+    return terms[:limit]
+
+
+def mic_choices()-> list[tuple[str, int | None]]:
     """("System default", None) then every input device as "index: name"; never raises."""
     choices: list[tuple[str, int | None]] = [("System default", None)]
     try:

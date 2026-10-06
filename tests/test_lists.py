@@ -384,3 +384,16 @@ def _words(text: str) -> list[str]:
 ])
 def test_bullets_preserve_words(text):
     assert _words(format_lists(text)) == _words(text)
+
+
+def test_ordinals_without_commas_form_a_list():
+    assert format_lists("First open the lid. Second press the button. Third close the lid.") == (
+        "1. Open the lid\n2. Press the button\n3. Close the lid")
+
+
+@pytest.mark.parametrize("text", [
+    "First floor is the primary suite. Second floor has three bedrooms. Third floor is the attic.",
+    "First open it. Second press it.",
+])
+def test_bare_ordinals_need_three_and_a_real_clause(text):
+    assert format_lists(text) == text

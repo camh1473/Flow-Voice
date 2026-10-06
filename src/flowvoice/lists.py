@@ -29,6 +29,13 @@ _ORDINAL_MARKER = re.compile(
     r"(?<!\w)(?P<o>" + "|".join(sorted(_ORDINALS, key=len, reverse=True)) + r")(?!\w)(?!\s+of\s+all\b)(?P<p>[,:])",
     re.IGNORECASE,
 )
+_BARE_ORDINAL = re.compile(
+    r"(?<!\w)(?P<o>" + "|".join(sorted(_ORDINALS, key=len, reverse=True))
+    + r")(?!\w)(?!\s+(?:of|floor|time|place|name|half|quarter|base|day|week|month|year|class|grade|gear"
+    r"|edition|generation|chapter|round|row|line|page|draft|car|house|lady|world|priority|choice|thought"
+    r"|aid|hand|person|party|step|one|thing|and|or|but)(?!\w))",
+    re.IGNORECASE,
+)
 _CLAUSE_BOUNDARY = re.compile(r"(?:^|[.!?:;,\n])\Z")
 _MARKUP = re.compile(r"(?m)^[ \t]*- |\n[ \t]*\d+\. ")
 _SENTENCE_START = re.compile(r"(?:^|[.!?:]\s+|\n\s*)$")
@@ -111,11 +118,18 @@ def _ordinal_markers(text: str) -> list[Marker]:
 
     'First, ...' and 'Okay, first, ...' count; 'Safety first, ...' and 'came in first,' do not.
     """
-    return [
+    markers = [
         Marker(m.start(), m.end(), _ORDINALS[m.group("o").lower()], "ordinal")
         for m in _ORDINAL_MARKER.finditer(text)
         if _CLAUSE_BOUNDARY.search(text[:m.start()].rstrip(" \t"))
     ]
+    # Whisper often drops the comma ("First open the lid. Second press..."): a bare ordinal
+    # counts only at a sentence start, and the run then needs three of them (see _min_length).
+    taken = {m.start for m in markers}
+    for m in _BARE_ORDINAL.finditer(text):
+        if m.start() not in taken and _SENTENCE_START.search(text[:m.start()]):
+            markers.append(Marker(m.start(), m.end(), _ORDINALS[m.group("o").lower()], "bare"))
+    return sorted(markers)
 
 
 def _select_run(markers: list[Marker]) -> list[Marker]:
@@ -136,6 +150,8 @@ def _select_run(markers: list[Marker]) -> list[Marker]:
 def _min_length(run: list[Marker]) -> int:
     """Comma-only runs (a final `N.` may end the sentence) need 3 markers; others need 2."""
     kinds = [m.kind for m in run]
+    if "bare" in kinds:
+        return 3
     comma_only = bool(kinds) and all(k == "," for k in kinds[:-1]) and kinds[-1] in (",", ".")
     return 3 if comma_only else 2
 

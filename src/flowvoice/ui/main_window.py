@@ -66,9 +66,13 @@ class MainWindow(QMainWindow):
 
     Page seam: `set_history_view(widget)` and `set_settings_view(widget)` swap a page in the
     stack, update the matching attribute and pass the UI scale to the page's `set_scale`.
+    `capture_started` / `capture_finished` forward the current settings page's hotkey
+    capture lifecycle (the app pauses its global hotkeys in between).
     """
 
     quit_requested = Signal()
+    capture_started = Signal()
+    capture_finished = Signal()
 
     def __init__(
         self,
@@ -121,6 +125,7 @@ class MainWindow(QMainWindow):
         self.home.hint(hint_text(config))
         self.history_view: QWidget = HistoryView(history)
         self.settings_view: QWidget = SettingsView(config, self.mics or mic_choices(), on_save_config)
+        self._link_capture(self.settings_view, True)
         for page in (self.home, self.history_view, self.settings_view):
             self.pages.addWidget(page)
         row.addWidget(self.pages, 1)
@@ -163,9 +168,22 @@ class MainWindow(QMainWindow):
         self._scale_pages()
 
     def set_settings_view(self, widget: QWidget) -> None:
+        if widget is not self.settings_view:
+            self._link_capture(self.settings_view, False)
+            self._link_capture(widget, True)
         self._replace_page(self.settings_view, widget)
         self.settings_view = widget
         self._scale_pages()
+
+    def _link_capture(self, page: QWidget, connect: bool) -> None:
+        for name in ("capture_started", "capture_finished"):
+            source = getattr(page, name, None)
+            if source is None:
+                continue
+            if connect:
+                source.connect(getattr(self, name))
+            else:
+                source.disconnect(getattr(self, name))
 
     def show_page(self, name: str) -> None:
         self.sidebar.setCurrentRow(PAGES.index(name))

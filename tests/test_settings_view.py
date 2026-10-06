@@ -285,6 +285,129 @@ def test_capture_passes_suppress_false(qapp):
     assert calls == [{"suppress": False}]
 
 
+def _record(obj) -> list[str]:
+    events: list[str] = []
+    obj.capture_started.connect(lambda: events.append("started"))
+    obj.capture_finished.connect(lambda: events.append("finished"))
+    return events
+
+
+def _blocking_edit(**kwargs) -> tuple[HotkeyEdit, threading.Event]:
+    release = threading.Event()
+    edit = HotkeyEdit(reader=lambda suppress=True: release.wait(2) and "f9", **kwargs)
+    edit.set_hotkey("right ctrl")
+    return edit, release
+
+
+def test_capture_signals_on_success(qapp):
+    edit = HotkeyEdit(reader=lambda suppress=True: "f9")
+    events = _record(edit)
+    edit.begin_capture()
+    assert events == ["started"]
+    assert _wait(lambda: not edit.is_capturing())
+    _wait(lambda: False, 0.05)
+    assert events == ["started", "finished"]
+
+
+def test_capture_signals_on_reader_esc(qapp):
+    edit = HotkeyEdit(reader=lambda suppress=True: "esc")
+    events = _record(edit)
+    edit.begin_capture()
+    assert _wait(lambda: not edit.is_capturing())
+    _wait(lambda: False, 0.05)
+    assert events == ["started", "finished"]
+
+
+def test_capture_signals_on_escape_key(qapp):
+    edit, release = _blocking_edit()
+    events = _record(edit)
+    edit.begin_capture()
+    QTest.keyClick(edit, Qt.Key_Escape)
+    release.set()
+    _wait(lambda: False, 0.1)
+    assert events == ["started", "finished"]
+
+
+def test_capture_signals_on_timeout(qapp):
+    edit, release = _blocking_edit(timeout_ms=30)
+    events = _record(edit)
+    edit.begin_capture()
+    assert _wait(lambda: not edit.is_capturing())
+    release.set()
+    _wait(lambda: False, 0.1)
+    assert events == ["started", "finished"]
+
+
+def test_capture_signals_on_focus_out(qapp):
+    from PySide6.QtCore import QEvent
+    from PySide6.QtGui import QFocusEvent
+    edit, release = _blocking_edit()
+    events = _record(edit)
+    edit.begin_capture()
+    edit.focusOutEvent(QFocusEvent(QEvent.FocusOut, Qt.MouseFocusReason))
+    assert not edit.is_capturing()
+    release.set()
+    _wait(lambda: False, 0.1)
+    assert events == ["started", "finished"]
+
+
+def test_capture_signals_on_reader_failure(qapp):
+    def reader(suppress=True):
+        raise OSError("hook unavailable")
+    edit = HotkeyEdit(reader=reader)
+    events = _record(edit)
+    edit.begin_capture()
+    assert _wait(lambda: not edit.is_capturing())
+    _wait(lambda: False, 0.05)
+    assert events == ["started", "finished"]
+
+
+def test_capture_signals_on_load_cancel(qapp):
+    view = _view()
+    view.ptt_edit._reader = lambda suppress=True: threading.Event().wait(0.2) and "f9"
+    events = _record(view.ptt_edit)
+    view.ptt_edit.begin_capture()
+    view.load(Config())
+    assert not view.ptt_edit.is_capturing()
+    _wait(lambda: False, 0.3)
+    assert events == ["started", "finished"]
+
+
+def test_second_begin_capture_emits_nothing_extra(qapp):
+    edit, release = _blocking_edit()
+    events = _record(edit)
+    edit.begin_capture()
+    edit.begin_capture()
+    assert events == ["started"]
+    release.set()
+    assert _wait(lambda: not edit.is_capturing())
+    _wait(lambda: False, 0.05)
+    assert events == ["started", "finished"]
+
+
+def test_captured_without_capture_emits_no_lifecycle(qapp):
+    edit = HotkeyEdit()
+    events = _record(edit)
+    edit.captured.emit("f9")
+    edit.cancel_capture()
+    assert events == []
+
+
+@pytest.mark.parametrize("name", ["ptt_edit", "tts_edit"])
+def test_settings_view_forwards_capture_signals(qapp, name):
+    view = _view()
+    edit = getattr(view, name)
+    release = threading.Event()
+    edit._reader = lambda suppress=True: release.wait(2) and "f9"
+    events = _record(view)
+    edit.begin_capture()
+    assert events == ["started"]
+    edit.cancel_capture()
+    release.set()
+    _wait(lambda: False, 0.05)
+    assert events == ["started", "finished"]
+
+
 @pytest.fixture
 def window(qapp, tmp_path):
     settings = QSettings(str(tmp_path / "w.ini"), QSettings.IniFormat)
@@ -306,6 +429,24 @@ def test_main_window_mounts_settings_view(window):
 def test_main_window_settings_save_reaches_on_save_config(window):
     window.settings_view.save_button.click()
     assert window.saved == [window.settings_view.to_config()]
+
+
+def test_main_window_forwards_capture_signals(window):
+    events = _record(window)
+    window.settings_view.capture_started.emit()
+    window.settings_view.capture_finished.emit()
+    assert events == ["started", "finished"]
+
+
+def test_main_window_forwards_capture_signals_after_seam_replace(window):
+    events = _record(window)
+    old = window.settings_view
+    new = SettingsView(Config(), MICS, lambda c: None)
+    window.set_settings_view(new)
+    old.capture_started.emit()
+    new.capture_started.emit()
+    new.capture_finished.emit()
+    assert events == ["started", "finished"]
 
 
 def test_switch_colors_follow_theme(qapp, tmp_path):

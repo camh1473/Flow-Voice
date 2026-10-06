@@ -1,7 +1,7 @@
 """Settings tab: grouped rounded cards (Dictation, Hands-free, Interface, Phrases) and Save."""
 from typing import Callable
 
-from PySide6.QtCore import Property, QPointF, Qt, QTimer
+from PySide6.QtCore import Property, QPointF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -88,7 +88,13 @@ def _separator() -> QFrame:
 
 
 class SettingsView(QWidget):
-    """Builds a Config from the form and hands it to `on_save`; never writes files itself."""
+    """Builds a Config from the form and hands it to `on_save`; never writes files itself.
+
+    `capture_started` / `capture_finished` forward either hotkey field's capture lifecycle.
+    """
+
+    capture_started = Signal()
+    capture_finished = Signal()
 
     def __init__(self, config: Config, mics: list[tuple[str, int | None]],
                  on_save: Callable[[Config], None], parent: QWidget | None = None) -> None:
@@ -201,6 +207,8 @@ class SettingsView(QWidget):
         self.tts_edit = HotkeyEdit()
         for edit in (self.ptt_edit, self.tts_edit):
             self._widths.append((edit, CONTROL_WIDTH))
+            edit.capture_started.connect(self.capture_started)
+            edit.capture_finished.connect(self.capture_finished)
         self.model_combo = self._combo()
         self.mic_combo = self._combo()
         self.history_switch = self._switch()

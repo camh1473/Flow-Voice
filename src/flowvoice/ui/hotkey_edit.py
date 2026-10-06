@@ -29,10 +29,13 @@ class HotkeyEdit(QLineEdit):
     The reader thread never touches widgets: it only emits `_finished(token, hotkey)`,
     which Qt queues to the GUI thread. Stale results (after Escape, a timeout or a newer
     capture) carry an old token and are ignored. Escape, a timeout or a reader failure
-    restore the previous value.
+    restore the previous value. `capture_started` / `capture_finished` bracket every real
+    capture exactly once so the app can pause its global hotkeys meanwhile.
     """
 
     captured = Signal(str)
+    capture_started = Signal()  # once per real capture; the app pauses its global hooks
+    capture_finished = Signal()  # once per capture on every exit path (success or cancel)
     _finished = Signal(int, str)
 
     def __init__(self, parent=None, reader: Callable[..., str] | None = None,
@@ -74,6 +77,7 @@ class HotkeyEdit(QLineEdit):
         self.setText(CAPTURE_TEXT)
         self._timer.start()
         token = self._token
+        self.capture_started.emit()
         try:
             threading.Thread(target=self._read, args=(token,), daemon=True,
                              name="hotkey-capture").start()
@@ -108,12 +112,15 @@ class HotkeyEdit(QLineEdit):
         self._end_capture()
 
     def _end_capture(self) -> None:
+        was_capturing = self._capturing
         self._token += 1
         self._capturing = False
         self._timer.stop()
         self.setProperty("capturing", "false")
         self._restyle()
         self.setText(pretty_key(self._hotkey))
+        if was_capturing:
+            self.capture_finished.emit()
 
     def _restyle(self) -> None:
         self.style().unpolish(self)

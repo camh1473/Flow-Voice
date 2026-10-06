@@ -788,6 +788,9 @@ class SettingsView(QWidget):
     @Slot(str, str)
     def _apply_ai_status(self, status: str, detail: str) -> None:
         self.ai_status_label.setText(ai_status_text(status, detail))
+        if status == "ready" and self.ai_result_label.text().startswith(
+                ("No installed models", "Could not list models")):
+            self.ai_result_label.setText("")  # a Refresh made while Ollama was down is stale now
 
     def _save(self) -> None:
         cfg = self.to_config()

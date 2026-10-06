@@ -834,3 +834,14 @@ def test_new_cards_sit_inside_scroll_area_and_save_bar_stays(qapp):
                    view.ai_switch, view.test_ai_button):
         assert body.isAncestorOf(widget)
     assert not body.isAncestorOf(view.save_button)
+
+
+def test_ready_status_clears_a_stale_model_list_error(qapp):
+    view = _ai_view()
+    view._on_models([], "")
+    assert view.ai_result_label.text().startswith("No installed models")
+    view._apply_ai_status("ready", "")
+    assert view.ai_result_label.text() == ""
+    view.ai_result_label.setText("OK in 1.2 s: sample")
+    view._apply_ai_status("ready", "")
+    assert view.ai_result_label.text() == "OK in 1.2 s: sample"

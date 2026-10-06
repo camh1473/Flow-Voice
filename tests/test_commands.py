@@ -77,6 +77,17 @@ def test_empty_mapping_returns_text_unchanged():
         "see you dot",
         "the dot com bubble",
         "in that period we grew",
+        "done period. next",
+        "Over a long period, we grew.",
+        "It was a hard period. Then we moved on.",
+        "We had a great period.",
+        "I had to dash to the store",
+        "My colon is fine",
+        "our slash key",
+        "I wrote it in all caps.",
+        "I wrote it in all caps and he got mad.",
+        "type it with all caps",
+        "the all caps style",
     ],
 )
 def test_guarded_words_stay_words(text):
@@ -88,7 +99,10 @@ def test_guarded_words_stay_words(text):
     [
         ("I am done period", "I am done."),
         ("Done, period.", "Done."),
-        ("done period. next", "done. next"),
+        ("Done. Period.", "Done."),
+        ("all caps hello end caps.", "HELLO."),
+        ("all caps hello, end caps world", "HELLO, world"),
+        ("john at sign my dash company dot com", "john@my-company.com"),
         ("done period new line next", "done.\nnext"),
         ("note colon buy milk", "note: buy milk"),
         ("well hyphen known", "well-known"),
@@ -119,7 +133,7 @@ def test_address_run_ends_at_next_plain_word():
 
 
 def test_address_run_overrides_word_guard():
-    assert apply_commands("x at sign the dash a dot com") == "x@the\u2014a.com"
+    assert apply_commands("x at sign the dash a dot com") == "x@the-a.com"
 
 
 def test_default_mapping_not_mutated():

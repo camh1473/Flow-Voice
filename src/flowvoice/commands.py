@@ -36,7 +36,13 @@ DEFAULT_COMMANDS: dict[str, str] = {
 }
 
 GUARDED = frozenset({"period", "colon", "hyphen", "dash", "em dash", "slash", "dot"})
-GUARD_WORDS = frozenset({"the", "a", "an", "this", "that", "time", "grace", "trial", "probation"})
+GUARD_WORDS = frozenset({
+    "the", "a", "an", "this", "that", "time", "grace", "trial", "probation",
+    "my", "your", "his", "her", "our", "their", "to",
+})
+CAPS_GUARD_WORDS = frozenset({
+    "in", "with", "using", "is", "are", "was", "were", "the", "a", "an", "my", "your",
+})
 TLDS = frozenset({"com", "org", "net", "edu", "gov", "io", "co", "us", "ai", "dev", "app", "uk"})
 _ADDRESS_JOINERS = frozenset({"slash", "hyphen", "dash", "em dash", "underscore", "dot"})
 _CAPS_ON = ("all", "caps")
@@ -106,9 +112,9 @@ def _converts(phrase, tokens, bare, i, n, in_address, next_is_command) -> bool:
     if phrase == "dot":
         return i + n < len(bare) and bare[i + n] in TLDS
     if phrase == "period":
-        end = i + n >= len(tokens)
-        touching = _set_off(tokens[i]) or (i > 0 and tokens[i - 1][-1] in _TOUCH_PUNCT + ":")
-        return end or touching or next_is_command
+        bare_end = i + n >= len(tokens) and not _set_off(tokens[i])
+        after_punct = i > 0 and tokens[i - 1][-1] in _TOUCH_PUNCT + ":"
+        return bare_end or after_punct or next_is_command
     return True
 
 
@@ -159,16 +165,28 @@ def apply_commands(text: str, mapping: dict[str, str] = DEFAULT_COMMANDS) -> str
             i += 1 + n
             continue
         m = _match(bare, i, phrases, longest)
-        if m and tuple(bare[i:i + m[1]]) in (_CAPS_ON, _CAPS_OFF):
-            caps = tuple(bare[i:i + m[1]]) == _CAPS_ON
+        marker = tuple(bare[i:i + m[1]]) if m else None
+        if marker in (_CAPS_ON, _CAPS_OFF) and not (
+            marker == _CAPS_ON and i > 0 and bare[i - 1] in CAPS_GUARD_WORDS
+        ):
+            n = m[1]
+            caps = marker == _CAPS_ON
+            last = tokens[i + n - 1]
+            trail = last[len(last.rstrip(_TOUCH_PUNCT)):]
+            if trail:
+                items.append(("attach", trail))
             changed = True
-            i += m[1]
+            i += n
             continue
         if m:
             phrase, n = m
             next_is_command = _match(bare, i + n, phrases, longest) is not None
-            if _converts(phrase, tokens, bare, i, n, in_address, next_is_command):
+            if marker not in (_CAPS_ON, _CAPS_OFF) and _converts(
+                phrase, tokens, bare, i, n, in_address, next_is_command
+            ):
                 output = mapping[phrase]
+                if in_address and phrase == "dash":
+                    output = "-"
                 role = _role(phrase, output)
                 if role == "attach" and items and items[-1][0] == "word":
                     prev = items.pop()[1].rstrip(_TOUCH_PUNCT)

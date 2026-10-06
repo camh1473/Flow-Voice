@@ -1,4 +1,4 @@
-# Flow Voice v2 manual test checklist
+# Flow Voice manual test checklist
 
 Run `run.bat`, wait for the speech model to load, and check each item. Mark pass or fail.
 
@@ -46,3 +46,23 @@ Run `run.bat`, wait for the speech model to load, and check each item. Mark pass
 31. [ ] Tray menu shows Open, Start dictation (Stop dictation while recording) and Quit. Start dictation records; Open shows the window.
 32. [ ] Quit from the tray. Expected: the tray icon and pill disappear and the process exits (no Flow Voice in Task Manager).
 33. [ ] Read aloud: select text in Notepad, press Ctrl+Alt+S. Expected: it speaks; pressing again stops. With nothing selected you get a "Read aloud: select some text first" notice, and if the speech engine fails you get a "Read aloud failed: ..." notice instead of silence.
+
+## Dictionary, snippets, lists and AI
+Settings pages: Words, Snippets, Lists and AI. Use Notepad as the target.
+
+34. [ ] **Numbered list by digits.** Say "to reset it, one, unplug it, two, wait thirty seconds, three, plug it back in". Expected: a lead-in line ending in a colon, then `1.` `2.` `3.` lines, each starting with a capital and with no stray commas.
+35. [ ] **Numbered list by words.** Say "first, open the lid. Second, press the button. Third, close the lid". Expected: a numbered list of three lines. Also say "number one call Sam number two send the file": two numbered lines.
+36. [ ] **Bullet cue.** Say "shopping list: milk, eggs and bread". Expected: `Shopping list:` then `- Milk`, `- Eggs`, `- Bread`. Then say "Shopping list, milk, eggs and bread" (no colon): same result.
+37. [ ] **No false list.** Say "I need 1 apple and 2 oranges" and "is it one, two, or three". Expected: both pasted as plain sentences. Turn **Automatic lists** off in Settings, Save, and repeat item 34: it is now plain text. Turn it back on.
+38. [ ] **Dictionary term.** Settings > Words: add `Perry Homes` to Dictionary, Save. Say "I work at perry homes". Expected: `Perry Homes` with that casing. (Whisper may also hear it better.)
+39. [ ] **Correction.** Add a Corrections row (Heard as `flow voyce`, Write as `Flow Voice`), Save. Say "open flow voyce". Expected: `Flow Voice`. Whole words only: a longer word containing the text is not changed.
+40. [ ] **Snippet verbatim.** Settings > Snippets: add trigger `my address`, text `123 Main St\nAustin, TX 78701` (no final period), Save. Say "send it to my address". Expected: the two address lines exactly as typed, with no period added after `78701` and no capitalization changes. Also say "my address." (Whisper usually adds a dot): still no extra period.
+41. [ ] **Snippet literal escape.** Say "literal my address". Expected: the words `my address` are typed, not the snippet.
+42. [ ] **Settings warnings.** Add a snippet whose trigger is `new line`: a warning says it is also a spoken command. Add a trigger `ab`: a warning about 3 characters. Add a row with text but a blank trigger: a warning that it will be ignored. Paste 201 distinct lines into Dictionary or 101 snippet rows: a warning says only the first 200 (or 100) are used. Remove them or close without saving.
+43. [ ] **AI enable (Ollama running).** Run `ollama pull qwen3.5:2b-q4_K_M` once, start Ollama, then Settings > Lists and AI: switch AI polish on, Save. Expected: the status goes from "AI: warming up..." to "AI: ready" within about a minute.
+44. [ ] **AI polish.** With AI ready, dictate a rambling 40-word note with a quantity, a date, a time, a name and a "not" (for example "okay so for Saturday I need to get two gallons of milk and a dozen eggs and we are not buying bread, call Priya at 3:30 on October 14 about the order"). Expected: pasted within a few seconds, possibly split into paragraphs or lines; every number, the date, the time, the name and "not" are exactly as spoken and no word was added or reworded. A dictation under 20 words is pasted without any AI change.
+45. [ ] **Test AI.** Press **Test AI**. Expected: a result line starting "OK in" with a time in seconds (about 1 to 3 s when warm) and the formatted sample.
+46. [ ] **AI with Ollama stopped.** Quit Ollama from its tray icon, then Settings > Lists and AI: switch AI polish off and on again, Save. Expected: the status shows "AI: unavailable" with a reason, plus one notice; dictation still pastes the normal text. Pressing Test AI says "Ollama is not running". Start Ollama again and Save: status returns to ready.
+47. [ ] **Model missing.** Type a model name that is not installed (for example `nosuchmodel:1b`) in AI model, Save. Expected: the status says the model is not installed and shows `ollama pull nosuchmodel:1b`; dictation still pastes normal text. Set the model back to `qwen3.5:2b-q4_K_M`.
+48. [ ] **Quit leaves Ollama alone.** With AI ready, quit Flow Voice from the tray. Expected: Ollama keeps running (check its tray icon or Task Manager).
+49. [ ] **Disable AI.** Switch AI polish off, Save. Expected: the status shows "AI: off" and dictation pastes the normal text with no delay.

@@ -33,6 +33,15 @@ def is_loopback(url: str) -> bool:
         return False
 
 
+def _literal_base(url: str) -> str:
+    """Request base URL with the name localhost replaced by 127.0.0.1 (no IPv6-first resolution stall)."""
+    parts = urllib.parse.urlsplit(url)
+    if (parts.hostname or "").lower() != "localhost":
+        return url
+    netloc = "127.0.0.1" + (f":{parts.port}" if parts.port else "")
+    return urllib.parse.urlunsplit(parts._replace(netloc=netloc))
+
+
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         raise AiError("Local AI server tried to redirect the request")
@@ -50,6 +59,7 @@ class OllamaClient:
         self.url = url.strip().rstrip("/")
         self.model = model
         self.timeout = timeout
+        self._base = _literal_base(self.url)
 
     def _request(self, path: str, body: dict | None, timeout: float) -> bytes:
         """One HTTP call with a total deadline (worker thread joined with a timeout)."""
@@ -59,7 +69,7 @@ class OllamaClient:
             try:
                 data = json.dumps(body).encode("utf-8") if body is not None else None
                 req = urllib.request.Request(
-                    self.url + path, data=data,
+                    self._base + path, data=data,
                     headers={"Content-Type": "application/json"} if data else {},
                     method="POST" if data is not None else "GET")
                 with _opener().open(req, timeout=timeout) as resp:

@@ -367,3 +367,65 @@ def test_ensure_running_exe_lookup_raises():
         raise RuntimeError("x")
 
     assert ensure_running(_FakeClient([False]), spawn=lambda a: None, exe=bad) is False
+
+def _localhost_url(server):
+    return f"http://localhost:{server.httpd.server_address[1]}"
+
+
+def test_localhost_url_is_fast_and_works_with_ipv4_only_server(server):
+    server.routes[("GET", "/api/tags")] = lambda req: (200, {"models": [{"name": "m"}]}, None)
+    server.routes[("POST", "/api/chat")] = _chat_ok("ok")
+    client = OllamaClient(_localhost_url(server), "m")
+    assert client.url == _localhost_url(server)
+    start = time.monotonic()
+    assert client.is_up() is True
+    assert time.monotonic() - start < 0.5
+    assert client.chat("S", "U") == "ok"
+    assert client.list_models() == ["m"]
+    assert client.has_model() is True
+
+
+def test_localhost_connects_to_literal_ipv4_address(server):
+    seen = []
+
+    def tags(req):
+        seen.append(req.headers.get("Host"))
+        return 200, {"models": []}, None
+
+    server.routes[("GET", "/api/tags")] = tags
+    assert OllamaClient(_localhost_url(server), "m").is_up() is True
+    assert seen == [f"127.0.0.1:{server.httpd.server_address[1]}"]
+
+
+def test_ipv6_loopback_literal_works():
+    try:
+        s6 = socket.socket(socket.AF_INET6)
+        s6.bind(("::1", 0))
+    except OSError:
+        pytest.skip("IPv6 loopback not available")
+    s6.close()
+
+    class Srv6(ThreadingHTTPServer):
+        address_family = socket.AF_INET6
+
+    class H(BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_GET(self):
+            data = b'{"models": []}'
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+    httpd = Srv6(("::1", 0), H)
+    httpd.daemon_threads = True
+    t = threading.Thread(target=httpd.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True)
+    t.start()
+    try:
+        assert OllamaClient(f"http://[::1]:{httpd.server_address[1]}", "m").is_up() is True
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        t.join(5)

@@ -13,7 +13,8 @@ class TalkMode:
     with only the dispatch RLock held: callbacks run in decision order across threads,
     and a callback may call back in on its own thread. A short tap starts then cancels
     (never stops), so a brush of the key never transcribes. Silence only stops a latched
-    take, and only after speech was heard; a take with no speech is cancelled.
+    take, and only after speech was heard; a latched take with no speech heard is
+    cancelled however it ends (press, click or the time cap).
     """
 
     def __init__(self, on_start: Callback, on_stop: Callback, on_cancel: Callback, *,
@@ -91,8 +92,12 @@ class TalkMode:
             return self._begin(now, "held")
         if self._state == "latched":
             self._last_tap_end = None
-            return self._end(self._on_stop, ignore_release=True)
+            return self._end(self._latched_finish(), ignore_release=True)
         return None
+
+    def _latched_finish(self) -> Callback:
+        """A latched take with no speech heard is cancelled, never transcribed."""
+        return self._on_stop if self._heard_speech else self._on_cancel
 
     def _decide_release(self) -> Optional[Callback]:
         now = self._clock()
@@ -127,7 +132,7 @@ class TalkMode:
             self._last_tap_end = None
             return self._begin(now, "latched")
         if self._state == "latched":
-            return self._end(self._on_stop)
+            return self._end(self._latched_finish())
         return None
 
     def _decide_tick(self) -> Optional[Callback]:
@@ -137,5 +142,5 @@ class TalkMode:
         if self._heard_speech and now - self._last_voice >= self.silence_stop_seconds:
             return self._end(self._on_stop)
         if now - self._latch_at >= self._max:
-            return self._end(self._on_stop if self._heard_speech else self._on_cancel)
+            return self._end(self._latched_finish())
         return None

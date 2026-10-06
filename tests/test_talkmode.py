@@ -71,6 +71,7 @@ def test_double_tap_latches():
 def test_third_press_stops_and_its_release_is_ignored():
     tm, clock, events = make()
     latch(tm, clock)
+    tm.level(0.5)
     clock.advance(2.0)
     tm.press()
     assert events[-1] == "stop"
@@ -164,10 +165,42 @@ def test_click_toggles_latched_recording():
     tm.click()
     assert events == ["start"]
     assert tm.state == "latched"
+    tm.level(0.5)
     clock.advance(1.0)
     tm.click()
     assert events == ["start", "stop"]
     assert tm.state == "idle"
+
+
+def test_latched_press_with_no_speech_cancels():
+    tm, clock, events = make()
+    latch(tm, clock)
+    tm.level(0.01)
+    clock.advance(2.0)
+    tm.press()
+    assert events == ["start", "cancel", "start", "cancel"]
+    assert tm.state == "idle"
+    clock.advance(0.1)
+    tm.release()
+    assert events == ["start", "cancel", "start", "cancel"]
+    assert tm.state == "idle"
+
+
+def test_latched_click_with_no_speech_cancels():
+    tm, clock, events = make()
+    latch(tm, clock)
+    clock.advance(2.0)
+    tm.click()
+    assert events == ["start", "cancel", "start", "cancel"]
+    assert tm.state == "idle"
+
+
+def test_click_latch_then_click_with_no_speech_cancels():
+    tm, clock, events = make()
+    tm.click()
+    clock.advance(1.0)
+    tm.click()
+    assert events == ["start", "cancel"]
 
 
 def test_click_while_held_ignored():
@@ -326,10 +359,11 @@ def test_callback_may_reenter_same_thread_without_deadlock():
     assert tm.state == "idle"
 
 
-def _gated(events, gate, entered):
+def _gated(events, gate, entered, holder):
     def on_start():
         entered.set()
         gate.wait(2.0)
+        holder["tm"].level(0.5)  # speech heard, so the next stop is a real stop
         events.append("start")
     return on_start
 
@@ -339,8 +373,10 @@ def _race(second_call):
     events: list[str] = []
     gate, entered = threading.Event(), threading.Event()
     clock = Clock()
-    tm = TalkMode(_gated(events, gate, entered), lambda: events.append("stop"),
+    holder: dict = {}
+    tm = TalkMode(_gated(events, gate, entered, holder), lambda: events.append("stop"),
                   lambda: events.append("cancel"), clock=clock)
+    holder["tm"] = tm
     a = threading.Thread(target=tm.click, daemon=True)
     a.start()
     assert entered.wait(2.0)

@@ -181,10 +181,21 @@ def test_double_tap_cycle_pastes_once():
     clock.t += 0.2
     app.press(); clock.t += 0.1; app.release()
     assert app.talk.state == "latched" and ui.states[-1] == "recording"
+    app.on_level(0.5)
     clock.t += 3.0
     app.click(); app.dictation.join()
     assert pasted == ["Hello"]
     assert app.talk.state == "idle" and ui.states[-1] == "idle"
+
+
+def test_latched_take_with_no_speech_is_cancelled_not_transcribed():
+    clock = Clock()
+    app, pasted, ui, _ = make(clock=clock)
+    app.click()
+    clock.t += 3.0
+    app.click(); app.dictation.join()
+    assert pasted == [] and app.talk.state == "idle" and ui.states[-1] == "idle"
+    assert "processing" not in ui.states
 
 
 def test_silence_stop_pastes():

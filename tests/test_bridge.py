@@ -1,9 +1,12 @@
+import inspect
 import threading
 
 from PySide6.QtCore import QCoreApplication, QObject, Slot
+import pytest
 
 from flowvoice.history import HistoryEntry
 from flowvoice.ui.bridge import QtUi
+from flowvoice.ui_api import Ui
 
 
 def _entry() -> HistoryEntry:
@@ -43,24 +46,58 @@ def test_add_history_emits_entry(qapp):
     assert got == [entry]
 
 
-def test_emit_from_thread_runs_slot_on_main_thread(qapp):
-    class Receiver(QObject):
-        def __init__(self):
-            super().__init__()
-            self.threads = []
-            self.values = []
-
-        @Slot(str)
-        def on_state(self, value):
-            self.threads.append(threading.current_thread())
-            self.values.append(value)
-
+def test_qtui_satisfies_ui_protocol(qapp):
     ui = QtUi()
-    receiver = Receiver()
-    ui.state_changed.connect(receiver.on_state)
-    worker = threading.Thread(target=lambda: ui.set_state("processing"))
+    assert isinstance(ui, Ui)
+    for name, params in [
+        ("set_state", ["state"]),
+        ("set_level", ["level"]),
+        ("notify", ["message"]),
+        ("add_history", ["entry"]),
+    ]:
+        assert list(inspect.signature(getattr(ui, name)).parameters) == params
+
+
+class _Receiver(QObject):
+    def __init__(self):
+        super().__init__()
+        self.calls = []
+
+    @Slot(str)
+    def on_str(self, value):
+        self.calls.append((threading.current_thread(), value))
+
+    @Slot(float)
+    def on_float(self, value):
+        self.calls.append((threading.current_thread(), value))
+
+    @Slot(object)
+    def on_obj(self, value):
+        self.calls.append((threading.current_thread(), value))
+
+
+_ENTRY = _entry()
+
+
+@pytest.mark.parametrize(
+    "method, signal, slot, arg",
+    [
+        ("set_state", "state_changed", "on_str", "recording"),
+        ("set_level", "level_changed", "on_float", 0.5),
+        ("notify", "message", "on_str", "x"),
+        ("add_history", "entry_added", "on_obj", _ENTRY),
+    ],
+)
+def test_emit_from_thread_is_queued_to_main_thread(qapp, method, signal, slot, arg):
+    ui = QtUi()
+    receiver = _Receiver()
+    getattr(ui, signal).connect(getattr(receiver, slot))
+    worker = threading.Thread(target=lambda: getattr(ui, method)(arg))
     worker.start()
     worker.join()
+    assert receiver.calls == []
     QCoreApplication.processEvents()
-    assert receiver.values == ["processing"]
-    assert receiver.threads == [threading.main_thread()]
+    assert len(receiver.calls) == 1
+    thread, value = receiver.calls[0]
+    assert thread is threading.main_thread()
+    assert value is arg if method == "add_history" else value == arg

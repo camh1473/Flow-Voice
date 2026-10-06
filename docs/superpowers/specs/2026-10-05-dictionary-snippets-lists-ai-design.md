@@ -12,13 +12,13 @@ Make dictated text come out cleaner and more personal, entirely on this PC:
 ## User decisions and rulings
 - Scope is dictionary + snippets + lists + local AI. Not in this spec: context-aware tone, command mode (highlight and rewrite), cloud models.
 - AI polish is **off by default**, enabled in Settings; it applies only to dictations of at least **20 words** (adjustable). Ollama is started by the app only when AI is enabled.
-- Default model is the one already installed, `qwen3.5:0.8b`; the model is a Settings choice (any model Ollama has). The app never downloads models itself.
+- Default model is **`qwen3.5:2b-q4_K_M`** (1.9 GB; the user pulls it themselves with `ollama pull qwen3.5:2b-q4_K_M`). It fits the free video memory on this PC (GTX 1660 Ti, 6 GB, about 2.9 GB free in normal use). The model is a Settings choice (any model Ollama has). The app never downloads models itself and never silently falls back to a different model: if the chosen model is not installed, the AI status says so and shows the pull command.
 - Nothing leaves the PC: the AI client talks only to a loopback address.
 
 ## What the probes on this PC showed (they shape the design)
 - `faster-whisper` 1.2.1 supports `initial_prompt` and `hotwords`.
 - Ollama 0.35.1 + `qwen3.5:0.8b` answers over `http://localhost:11434/api/chat`. First call after the server was down took **28 s** (server start + model load); warm calls take **0.2 s**. So the model must be warmed up in the background, never on a dictation.
-- With a bare instruction, the 0.8B model returned a **single** bullet and did not split the items. So rule-based lists are the primary mechanism and the AI polish is a bonus that needs few-shot examples and strict output checking. A 3B model (`ollama pull llama3.2:3b`) is the recommended upgrade, not a requirement.
+- With a bare instruction, the 0.8B model returned a **single** bullet and did not split the items. So rule-based lists are the primary mechanism and the AI polish is a bonus that needs few-shot examples and strict output checking. The chosen default is the 2B `qwen3.5` (same family and settings as the 0.8B that was probed); `llama3.2:3b` is an alternative the user can select. Quality of the 2B on real dictation is to be confirmed with the Test AI button and the scripted probe.
 
 ## Text pipeline (new order; the existing steps keep their behavior)
 ```
@@ -65,7 +65,7 @@ Runs on the cleaned text; skipped if the text already has list markup (a line st
 
 ## 4. Local AI polish (setting `ai_enabled`, default off)
 - **Client** (`ai.py`, stdlib `urllib`, no new dependencies): `OllamaClient(url, model, timeout)` with `chat(system, user)` (`/api/chat`, `stream=false`, `think=false`, temperature 0, output capped, `keep_alive` 30 min), `list_models()` (`/api/tags`), `ensure_running()`. The URL must be loopback (`localhost`, `127.0.0.1`, `::1`); anything else is refused.
-- **Start-up and warm-up:** when AI is enabled (at launch or when switched on), a background thread starts `ollama serve` hidden if it is not running (exe from `PATH` or `%LOCALAPPDATA%\Programs\Ollama\ollama.exe`), waits up to 30 s, then loads the model with a tiny request. Status is `off | warming | ready | unavailable`, shown in Settings; one toast on failure ("AI polish unavailable: ..."). Dictations never wait for warm-up: while the status is not `ready`, polish is skipped.
+- **Start-up and warm-up:** when AI is enabled (at launch or when switched on), a background thread starts `ollama serve` hidden if it is not running (exe from `PATH` or `%LOCALAPPDATA%\Programs\Ollama\ollama.exe`), waits up to 30 s, then loads the model with a tiny request. Status is `off | warming | ready | missing model | unavailable`, shown in Settings; one toast on failure ("AI polish unavailable: ..."). Dictations never wait for warm-up: while the status is not `ready`, polish is skipped.
 - **When it runs:** status `ready`, at least `ai_min_words` words (default 20), no list markup already present. Runs on the dictation worker thread, so the pill shows "processing"; the call has a timeout (`ai_timeout_seconds`, default 6) and any failure falls back to the rule-based text.
 - **Prompt:** a system prompt (restructure only: bullets if the speaker lists items, numbered if they counted, otherwise short paragraphs; keep every word's meaning; never add facts or answer questions; keep private-use placeholder characters exactly; output only the text) plus three few-shot examples (list, paragraphs, already fine -> unchanged).
 - **Output check** (`ai_acceptable(original, candidate) -> bool`, pure): at least 85% of the original's words appear in the result; at most 15% of the result's words are new; length between 0.7x and 1.5x ignoring list markers and newlines; every placeholder character present exactly as often as before; no preamble ("Sure", "Here is", ...); surrounding quotes and code fences are stripped first. Failing the check means the rule-based text is used and a short note is kept for the Settings "Test AI" panel.
@@ -73,7 +73,7 @@ Runs on the cleaned text; skipped if the text already has list markup (a line st
 
 ## 5. Settings and config
 - New Settings cards: **Words** (terms editor, fixes table), **Snippets** (table), **Lists and AI** (auto-lists switch; AI switch, model dropdown listing installed Ollama models with a Refresh button, minimum-words spinner, status line, "Test AI" button that sends a sample and shows the result and latency). All apply live; none needs a restart.
-- `Config` gains: `dictionary_terms: list[str]`, `dictionary_fixes: dict[str, str]`, `snippets: dict[str, str]`, `auto_lists: bool = True`, `ai_enabled: bool = False`, `ai_model: str = "qwen3.5:0.8b"`, `ai_min_words: int = 20`, `ai_timeout_seconds: float = 6.0`, `ai_url: str = "http://localhost:11434"` (config file only). Loading validates each field and falls back to its default.
+- `Config` gains: `dictionary_terms: list[str]`, `dictionary_fixes: dict[str, str]`, `snippets: dict[str, str]`, `auto_lists: bool = True`, `ai_enabled: bool = False`, `ai_model: str = "qwen3.5:2b-q4_K_M"`, `ai_min_words: int = 20`, `ai_timeout_seconds: float = 6.0`, `ai_url: str = "http://localhost:11434"` (config file only). Loading validates each field and falls back to its default.
 
 ## Non-goals
 Tone adaptation, command mode, cloud LLMs, streaming output, per-app dictionaries, snippet variables (date, clipboard), importing/exporting the dictionary, other languages, automatically downloading models.

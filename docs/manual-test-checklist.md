@@ -29,8 +29,8 @@ Run `run.bat`, wait for the speech model to load, and check each item. Mark pass
 18. [ ] Copy: select an entry, click Copy, paste into Notepad. Expected: the entry text.
 19. [ ] Delete: select an entry, click Delete. Expected: it disappears.
 20. [ ] Clear all: click it, confirm. Expected: a confirmation prompt, then the list is empty.
-21. [ ] A new dictation appears at the top of History without reopening the page, and Home shows it under Last transcription.
-22. [ ] History off: Settings -> Dictation -> turn Save history off, Save. Dictate. Expected: text still pastes; saving stops: existing entries stay listed and no new rows appear (the page does not say that history is off). Turn it back on afterwards.
+21. [ ] A new dictation appears at the top of History without reopening the page, and Home shows it under Last transcription. (If History shows an orange "Saving is off" bar, new dictations only reach Home: click Turn on, or switch Save history on in Settings, then dictate again.)
+22. [ ] History off: Settings -> Dictation -> turn Save history off, Save. Dictate. Expected: text still pastes; saving stops: existing entries stay listed, no new rows appear, and the History page shows an orange "Saving is off" bar. Click its Turn on button: the bar disappears and the Settings switch is on again.
 
 ## Settings
 23. [ ] Live change: edit a phrase in the command table (for example change "comma" output) or the spoken-commands switch, Save. Expected: "Saved"; the app does not restart; the new behavior applies on the next dictation.

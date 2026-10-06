@@ -137,3 +137,35 @@ def test_main_window_scale_propagates_to_history(qapp, tmp_path):
     assert win.history_view.gaps == theme.history_gaps(1.5)
     win.request_quit()
     win.close()
+
+
+# --- "Saving is off" banner: a new dictation never reaches History while saving is off ---
+
+def test_banner_hidden_while_saving_is_on(qapp, hist):
+    view = _view(hist)
+    view.set_saving(True)
+    assert not view.banner.isVisibleTo(view)
+
+
+def test_banner_shown_when_saving_is_off(qapp, hist):
+    view = _view(hist)
+    view.set_saving(False)
+    assert view.banner.isVisibleTo(view)
+    assert "off" in view.banner_text.text().lower()
+    view.set_saving(True)
+    assert not view.banner.isVisibleTo(view)
+
+
+def test_banner_never_shown_when_history_itself_is_unavailable(qapp):
+    view = HistoryView(None)
+    view.set_saving(False)
+    assert not view.banner.isVisibleTo(view)
+
+
+def test_turn_on_button_emits_enable_saving_requested_once(qapp, hist):
+    view = _view(hist)
+    view.set_saving(False)
+    got = []
+    view.enable_saving_requested.connect(lambda: got.append(1))
+    view.turn_on_button.click()
+    assert got == [1]

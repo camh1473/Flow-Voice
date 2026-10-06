@@ -27,6 +27,8 @@ LIGHT = {
     "destructive_hover": "#e6352b",
     "scroll": "rgba(0, 0, 0, 0.22)",
     "select": "#eaf3ff",
+    "warn_bg": "#fff4e0",
+    "warn_border": "#ffd9a0",
     "switch_off": "#d1d1d6",
 }
 
@@ -51,6 +53,8 @@ DARK = {
     "destructive_hover": "#ff5f55",
     "scroll": "rgba(255, 255, 255, 0.25)",
     "select": "#1f3552",
+    "warn_bg": "#3a2d16",
+    "warn_border": "#6b4a16",
     "switch_off": "#48484a",
 }
 
@@ -132,6 +136,11 @@ QStackedWidget, #Page {{ background: transparent; }}
 #SidebarList::item:hover:!selected {{ background: {c["hover"]}; }}
 #SidebarList::item:selected {{ background: {c["accent"]}; color: #ffffff; }}
 
+#Banner {{
+    background: {c["warn_bg"]};
+    border: 1px solid {c["warn_border"]};
+    border-radius: 12px;
+}}
 #Card {{
     background: {c["card"]};
     border: 1px solid {c["card_border"]};

@@ -180,3 +180,41 @@ def test_hint_mentions_ptt_key(window):
 
 def test_placeholder_pages_have_labels(window):
     assert window.history_view.findChild(QLabel) is not None
+
+
+# --- "Saving is off" banner wiring ---
+
+def _window_with_history(qapp, tmp_path, config):
+    from flowvoice.history import History
+    settings = QSettings(str(tmp_path / "w.ini"), QSettings.IniFormat)
+    saved = []
+    win = MainWindow(config, History(tmp_path / "h.db"), saved.append, settings=settings)
+    return win, saved
+
+
+def test_banner_follows_config_save_history(qapp, tmp_path):
+    off, _ = _window_with_history(qapp, tmp_path, Config(save_history=False))
+    on, _ = _window_with_history(qapp, tmp_path, Config(save_history=True))
+    assert off.history_view.banner.isVisibleTo(off.history_view)
+    assert not on.history_view.banner.isVisibleTo(on.history_view)
+    for w in (off, on):
+        w.request_quit(); w.close()
+
+
+def test_turn_on_saves_config_with_history_enabled_and_nothing_else_changed(qapp, tmp_path):
+    cfg = Config(save_history=False, ptt_key="f9", ui_scale=1.3)
+    win, saved = _window_with_history(qapp, tmp_path, cfg)
+    win.history_view.turn_on_button.click()
+    assert len(saved) == 1
+    assert saved[0].save_history is True
+    assert saved[0].ptt_key == "f9" and saved[0].ui_scale == 1.3
+    win.request_quit(); win.close()
+
+
+def test_update_saving_hides_banner_and_syncs_settings_switch(qapp, tmp_path):
+    win, _ = _window_with_history(qapp, tmp_path, Config(save_history=False))
+    assert win.settings_view.to_config().save_history is False
+    win.update_saving(Config(save_history=True))
+    assert not win.history_view.banner.isVisibleTo(win.history_view)
+    assert win.settings_view.to_config().save_history is True
+    win.request_quit(); win.close()

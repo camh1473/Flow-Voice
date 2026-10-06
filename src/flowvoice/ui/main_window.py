@@ -1,4 +1,5 @@
 """Main window: sidebar (Home / History / Settings) over a stack of pages."""
+import dataclasses
 from typing import Callable
 
 from PySide6.QtCore import QRect, QSettings, QSize, Qt, Signal
@@ -124,6 +125,8 @@ class MainWindow(QMainWindow):
         self.home = HomeView()
         self.home.hint(hint_text(config))
         self.history_view: QWidget = HistoryView(history)
+        self._link_history(self.history_view)
+        self._set_saving(config.save_history)
         self.settings_view: QWidget = SettingsView(config, self.mics or mic_choices(), on_save_config)
         self._link_capture(self.settings_view, True)
         for page in (self.home, self.history_view, self.settings_view):
@@ -139,6 +142,28 @@ class MainWindow(QMainWindow):
 
         self.apply_scale(self._scale)
         self._restore_geometry()
+
+    def _link_history(self, page: QWidget) -> None:
+        signal = getattr(page, "enable_saving_requested", None)
+        if signal is not None:
+            signal.connect(self._enable_saving)
+
+    def _set_saving(self, enabled: bool) -> None:
+        setter = getattr(self.history_view, "set_saving", None)
+        if setter is not None:
+            setter(enabled)
+
+    def _enable_saving(self) -> None:
+        """The banner's Turn on button: save the current config with history enabled."""
+        self.on_save_config(dataclasses.replace(self.config, save_history=True))
+
+    def update_saving(self, config: Config) -> None:
+        """Follow a live config change: banner state and the Settings page switch."""
+        self.config = config
+        self._set_saving(config.save_history)
+        loader = getattr(self.settings_view, "load", None)
+        if loader is not None:
+            loader(config)
 
     def apply_scale(self, scale: float) -> None:
         self._scale = scale
@@ -165,6 +190,8 @@ class MainWindow(QMainWindow):
     def set_history_view(self, widget: QWidget) -> None:
         self._replace_page(self.history_view, widget)
         self.history_view = widget
+        self._link_history(widget)
+        self._set_saving(self.config.save_history)
         self._scale_pages()
 
     def set_settings_view(self, widget: QWidget) -> None:

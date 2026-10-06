@@ -116,7 +116,7 @@ class Shell(QObject):
     def apply_config(self, cfg: Config) -> None:
         self.config = cfg
         self.pill.apply(cfg.ui_scale, cfg.pill_always_visible)
-        self.window.config = cfg
+        self.window.update_saving(cfg)
         self.window.apply_scale(cfg.ui_scale)
         self.window.home.hint(hint_text(cfg))
 

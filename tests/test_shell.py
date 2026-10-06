@@ -366,3 +366,12 @@ def test_saved_config_save_failure_notifies_and_stops():
     assert result == "failed"
     assert log == [("notify", "Could not save settings: disk full")]
     assert app.applied == []
+
+
+def test_apply_config_toggles_the_history_banner(make_shell):
+    s = make_shell(config=Config(save_history=False), history=FakeHistory())
+    assert s.window.history_view.banner.isVisibleTo(s.window.history_view)
+    s.apply_config(Config(save_history=True))
+    assert not s.window.history_view.banner.isVisibleTo(s.window.history_view)
+    s.apply_config(Config(save_history=False))
+    assert s.window.history_view.banner.isVisibleTo(s.window.history_view)

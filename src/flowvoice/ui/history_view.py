@@ -1,7 +1,7 @@
 """History tab: searchable list of past dictations shown as card rows."""
 from typing import Callable
 
-from PySide6.QtCore import QEvent, QSize, Qt
+from PySide6.QtCore import QEvent, QSize, Qt, Signal
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -25,6 +25,8 @@ MSG_OFF = "History is off"
 MSG_EMPTY = "Nothing here yet"
 MSG_NO_MATCH = "No matches"
 MSG_ERROR = "History unavailable"
+MSG_SAVING_OFF = ("Saving is off: new dictations are not being added to History. "
+                  "Existing entries stay listed.")
 CLEAR_PROMPT = "Delete all history? This cannot be undone."
 ENTRY_ROLE = Qt.UserRole
 
@@ -54,6 +56,9 @@ def _row_widget(entry: HistoryEntry, side_gap: int) -> QFrame:
 
 
 class HistoryView(QWidget):
+    # Emitted when the user clicks "Turn on" in the saving-is-off banner.
+    enable_saving_requested = Signal()
+
     def __init__(self, history: History | None,
                  confirm: Callable[[str], bool] = default_confirm,
                  parent: QWidget | None = None) -> None:
@@ -70,6 +75,22 @@ class HistoryView(QWidget):
         title = QLabel("History")
         title.setObjectName("PageTitle")
         root.addWidget(title)
+
+        self.banner = QFrame()
+        self.banner.setObjectName("Banner")
+        banner_row = QHBoxLayout(self.banner)
+        banner_row.setContentsMargins(16, 10, 12, 10)
+        banner_row.setSpacing(12)
+        self.banner_text = QLabel(MSG_SAVING_OFF)
+        self.banner_text.setWordWrap(True)
+        banner_row.addWidget(self.banner_text, 1)
+        self.turn_on_button = QPushButton("Turn on")
+        self.turn_on_button.setProperty("variant", "primary")
+        self.turn_on_button.setCursor(Qt.PointingHandCursor)
+        self.turn_on_button.clicked.connect(self.enable_saving_requested)
+        banner_row.addWidget(self.turn_on_button)
+        self.banner.setVisible(False)
+        root.addWidget(self.banner)
 
         bar = QHBoxLayout()
         bar.setSpacing(8)
@@ -119,6 +140,10 @@ class HistoryView(QWidget):
             if body is not None:
                 body.layout().setContentsMargins(16, 12, 16 + self._gaps[1], 12)
         self._fit_rows()
+
+    def set_saving(self, enabled: bool) -> None:
+        """Show a banner while Save history is off (dictations then reach Home only)."""
+        self.banner.setVisible(not enabled and self._history is not None)
 
     def row_count(self) -> int:
         return self.list.count()

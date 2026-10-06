@@ -93,7 +93,26 @@ def test_not_echo_short_dictation():
     assert not is_glossary_echo("Perry Homes, TBB, hello", ["Perry Homes", "TBB", "Seiren"])
     assert not is_glossary_echo("TBB is great", ["TBB", "Perry Homes"])
     assert not is_glossary_echo("", ["TBB", "Perry Homes"])
-    assert not is_glossary_echo("Glossary:", ["TBB", "Perry Homes"])
+
+
+def test_echo_glossary_word_with_any_term_prefix():
+    terms = ["TBB", "Perry Homes", "Seiren"]
+    assert is_glossary_echo("Glossary: TBB, Perry Homes.", terms)
+    assert is_glossary_echo("Glossary: TBB.", terms)
+    assert is_glossary_echo("Glossary.", terms)
+    assert is_glossary_echo("Glossary:", terms)
+    assert is_glossary_echo("glossary", ["TBB"])
+
+
+def test_glossary_word_needs_in_order_prefix_and_a_glossary():
+    terms = ["TBB", "Perry Homes", "Seiren"]
+    assert not is_glossary_echo("Glossary: Perry Homes.", terms)
+    assert not is_glossary_echo("Glossary: TBB, Seiren.", terms)
+    assert not is_glossary_echo("Glossary: Perry Homes, TBB.", terms)
+    assert not is_glossary_echo("Glossary: TBB, Perry Homes, Seiren, hello.", terms)
+    assert not is_glossary_echo("The glossary.", terms)
+    assert not is_glossary_echo("Glossary.", [])
+    assert not is_glossary_echo("TBB", ["TBB"])
 
 
 def test_longer_term_outranks_overlapping_fix():

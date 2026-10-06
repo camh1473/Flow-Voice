@@ -54,14 +54,15 @@ def _words(text: str) -> list[str]:
 def is_glossary_echo(text: str, terms: list[str]) -> bool:
     """True when a transcript is the glossary prompt echoed back (Whisper on silence).
 
-    Only the whole prompt, or the first 2+ terms in list order, count; a single term
-    said alone is real dictation.
+    "Glossary" followed by any in-order prefix of the terms (even none), or the first 2+
+    terms in list order, count; a single term said alone is real dictation.
     """
     words = _words(text)
     chosen = _prompt_terms(terms)
     if not words or not chosen:
         return False
     parts = [_words(t) for t in chosen]
-    if words == ["glossary"] + [w for p in parts for w in p]:
+    prefixes = [[w for p in parts[:k] for w in p] for k in range(len(parts) + 1)]
+    if words[0] == "glossary" and words[1:] in prefixes:
         return True
-    return any(words == [w for p in parts[:k] for w in p] for k in range(2, len(parts) + 1))
+    return any(words == prefix for prefix in prefixes[2:])

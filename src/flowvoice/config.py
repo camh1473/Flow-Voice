@@ -73,3 +73,15 @@ def save_config(cfg: Config, path: Path | None = None) -> None:
     path = path or default_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(asdict(cfg), indent=2), encoding="utf-8")
+
+
+def ensure_config_file(cfg: Config, path: Path | None = None) -> bool:
+    """Write cfg if no config file exists yet; return whether this was the first run."""
+    path = path or default_path()
+    if path.exists():
+        return False
+    try:
+        save_config(cfg, path)
+    except Exception:
+        pass
+    return True

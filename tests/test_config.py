@@ -75,6 +75,24 @@ def test_ui_scale_clamped_on_load(tmp_path):
     assert load_config(p).ui_scale == 0.8
 
 
+def test_ensure_config_file_writes_once_on_first_run(tmp_path):
+    from flowvoice.config import ensure_config_file
+    p = tmp_path / "sub" / "c.json"
+    cfg = Config(ptt_key="f9")
+    assert ensure_config_file(cfg, p) is True
+    assert p.exists() and load_config(p).ptt_key == "f9"
+    assert ensure_config_file(Config(), p) is False
+    assert load_config(p).ptt_key == "f9"  # an existing file is never overwritten
+
+
+def test_ensure_config_file_save_failure_is_not_fatal(tmp_path):
+    from flowvoice.config import ensure_config_file
+    blocker = tmp_path / "file"
+    blocker.write_text("x")
+    p = blocker / "c.json"  # parent is a file: mkdir/write fails
+    assert ensure_config_file(Config(), p) is True
+
+
 def test_phrase_lists_not_shared_between_instances():
     a, b = Config(), Config()
     a.filler_phrases.append("zzz")

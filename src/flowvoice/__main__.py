@@ -6,8 +6,7 @@ from types import SimpleNamespace
 
 from flowvoice.app import App
 from flowvoice.autostart import set_autostart
-from flowvoice.config import default_path as config_path
-from flowvoice.config import load_config, save_config
+from flowvoice.config import ensure_config_file, load_config, save_config
 from flowvoice.history import History
 from flowvoice.hotkey import PushToTalk, Toggle
 from flowvoice.recorder import Recorder
@@ -39,8 +38,8 @@ def _unhook_all() -> None:
 
 
 def main() -> int:
-    first_run = not config_path().exists()
     cfg = load_config()
+    first_run = ensure_config_file(cfg)
     autostart_error = None
     try:
         set_autostart(cfg.start_with_windows)

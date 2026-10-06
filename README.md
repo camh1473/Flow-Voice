@@ -81,7 +81,7 @@ The glossary helps recognition but cannot force Whisper to hear a word. Terms pa
 ## Automatic lists
 Switch: **Settings > Lists and AI > Automatic lists** (on by default). Lists are made by fixed rules, with no AI.
 
-**Numbered lists** start from a "set-off" number: a digit or a number word (one to ten) followed by a period, comma, colon or parenthesis; or `number one`; or the ordinals first, second, third (also firstly...) said at the start of a sentence or followed by a comma or colon. The numbers must run 1, 2, 3 in order. A list that uses only commas needs at least 3 markers; other styles need 2.
+**Numbered lists** start from a "set-off" number: a digit or a number word (one to ten) followed by a period, comma, colon or parenthesis; or `number one`; or the ordinals first, second, third (also firstly...) followed by a comma or colon ("First, ..."; a plain "First floor is..." is left alone). The numbers must run 1, 2, 3 in order. A list that uses only commas needs at least 3 markers; other styles need 2.
 - "To reset the router, first, unplug it, second, wait thirty seconds, third, plug it back in" becomes a lead-in line followed by `1.` `2.` `3.` lines.
 - "Steps: 1. open the lid 2. press the button" and "number one call Sam number two send the file" work too.
 
@@ -99,7 +99,7 @@ To enable it:
 
 With AI on, Flow Voice starts Ollama if it is not running, then loads the model. The status line shows `off`, `warming up`, `ready`, `model not installed` (with the pull command to run) or `unavailable` (with the reason, for example Ollama could not be started). A cold load can take about 30 seconds; dictations during that time paste the normal text. Each dictation waits at most 6 seconds for the AI. **Test AI** sends a sample and shows the result and how long it took.
 
-Safety: the AI can never change your words. Its output is checked against what you said; if it dropped or added words, changed a number, date or negation, dropped a name, reordered anything, added formatting, repeated a sentence, lost a snippet or timed out, the normal text is pasted instead. Any AI failure falls back to the normal text and never blocks a paste.
+Safety: the AI only restructures. It may drop connector words like "and"/"then" when it makes a list; numbers, names, negations and the order of your words are checked and anything suspicious falls back to the normal text. In detail, its output is compared with what you said; if it replaced, added or reordered a word, dropped any word other than a list connector (and, then, or, also, next, first, second, third, one to ten), changed or swapped a number, date or negation, dropped a name, added formatting, repeated a sentence, lost or moved a snippet or timed out, the normal text is pasted instead. Dictations over 300 words skip the AI, because the model must finish within the timeout. Any AI failure falls back to the normal text and never blocks a paste.
 
 Privacy: Flow Voice only talks to an address on this PC (localhost, 127.0.0.1 or ::1) and refuses any other, so your text never leaves it. Quitting Flow Voice never stops Ollama; quit it from its own tray icon to free the memory.
 

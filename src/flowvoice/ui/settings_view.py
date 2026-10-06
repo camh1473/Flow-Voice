@@ -480,8 +480,9 @@ class SettingsView(QWidget):
                   'or "shopping list: apples, bread and milk" for bullets.',
                   self.auto_lists_switch, first=True)
         self._row(card, "AI polish",
-                  "A local Ollama model splits long dictations into paragraphs and lists. "
-                  "Your words are kept and nothing leaves this PC.", self.ai_switch)
+                  "A local Ollama model splits long dictations into paragraphs and lists; "
+                  'nothing leaves this PC. It may drop "and" or "then" to make a list; '
+                  "any other change falls back to the normal text.", self.ai_switch)
         self._row(card, "AI model", "Any model installed in Ollama.",
                   model_box)
         self._row(card, "Minimum words", "Shorter dictations skip the AI.", self.ai_min_words)

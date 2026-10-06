@@ -15,7 +15,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import QWidget
 
-COLORS = {"idle": "#8e8e93", "recording": "#ff3b30", "processing": "#ff9f0a"}
+COLORS = {"idle": "#8e8e93", "recording": "#007aff", "processing": "#ff9f0a"}
 IDLE_SIZE = (56.0, 16.0)
 ACTIVE_SIZE = (220.0, 48.0)
 MARGIN = 16.0
@@ -30,7 +30,7 @@ WS_EX_NOACTIVATE = 0x08000000
 
 
 class PillWidget(QWidget):
-    """Idle: small dim capsule. Recording: red with live bars. Processing: amber with dots."""
+    """Idle: small dim capsule. Recording: blue with live bars. Processing: amber with dots."""
 
     clicked = Signal()
 

@@ -3,11 +3,11 @@
 Run `run.bat`, wait for the speech model to load, and check each item. Mark pass or fail.
 
 ## Hands-free and the pill
-1. [ ] **Double-tap latch.** Click into Notepad. Double-tap Right Ctrl quickly, say "testing one two three", then stay quiet. Expected: recording latches on (pill red); after about 4 seconds of silence it stops and the text is pasted into Notepad.
-2. [ ] **Single tap does nothing.** Tap Right Ctrl once, briefly. Expected: the pill briefly shows red and then returns to grey; nothing is pasted.
+1. [ ] **Double-tap latch.** Click into Notepad. Double-tap Right Ctrl quickly, say "testing one two three", then stay quiet. Expected: recording latches on (pill blue); after about 4 seconds of silence it stops and the text is pasted into Notepad.
+2. [ ] **Single tap does nothing.** Tap Right Ctrl once, briefly. Expected: the pill briefly shows blue and then returns to grey; nothing is pasted.
 3. [ ] **Hold to talk.** Hold Right Ctrl, say "hold test", release. Expected: text pasted; it does not stop on silence while you hold.
 4. [ ] **Pill click.** Click the pill, speak, click it again. Expected: starts then stops; text pasted.
-5. [ ] **Pill look and focus.** While recording, the pill is red with a moving waveform; while transcribing it is amber with animated dots. Check the paste lands correctly, and the pill never takes focus (the caret stays in the target), in each of: Notepad, a text box in a browser, Word.
+5. [ ] **Pill look and focus.** While recording, the pill is blue with a moving waveform; while transcribing it is amber with animated dots. Check the paste lands correctly, and the pill never takes focus (the caret stays in the target), in each of: Notepad, a text box in a browser, Word.
 6. [ ] **No speech first.** Latch recording with a double-tap and say nothing. Expected: it does not stop on silence before speech is heard; press Right Ctrl once to stop; nothing is pasted.
 7. [ ] **Esc cancels.** Start a hands-free take, speak, press Esc. Expected: recording ends and nothing is pasted. Also hold Right Ctrl, press another key (for example A): the take is cancelled.
 

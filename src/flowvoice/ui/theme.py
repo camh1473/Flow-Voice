@@ -4,7 +4,7 @@ from PySide6.QtWidgets import QApplication
 
 FONT_STACK = '"Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI"'
 
-STATE_COLORS = {"idle": "#8e8e93", "recording": "#ff3b30", "processing": "#ff9f0a"}
+STATE_COLORS = {"idle": "#8e8e93", "recording": "#007aff", "processing": "#ff9f0a"}
 
 LIGHT = {
     "bg": "#f5f5f7",

@@ -92,14 +92,14 @@ def test_shell_constructs(make_shell):
     assert s.tray is not None
 
 
-def test_ui_state_from_worker_thread_turns_pill_red(make_shell):
+def test_ui_state_from_worker_thread_turns_pill_blue(make_shell):
     s = make_shell()
     t = threading.Thread(target=s.ui.set_state, args=("recording",))
     t.start()
     t.join()
     QCoreApplication.processEvents()
     c = _body_color(s.pill)
-    assert c.red() > 200 and c.green() < 100
+    assert c.blue() > 200 and c.red() < 80
     assert s.window.home.state() == "recording"
 
 

@@ -29,9 +29,9 @@ def test_grab_is_not_null_in_every_state(qapp):
         pill.close()
 
 
-def test_recording_body_is_red(qapp):
+def test_recording_body_is_blue(qapp):
     c = body_color(make(qapp, "recording"))
-    assert c.red() > 200 and c.green() < 100
+    assert c.blue() > 200 and c.red() < 80
 
 
 def test_processing_body_is_amber(qapp):

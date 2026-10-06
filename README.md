@@ -74,7 +74,7 @@ The glossary helps recognition but cannot force Whisper to hear a word. Terms pa
 ## Snippets
 **Settings > Snippets.** A trigger phrase and the text it types (up to 100). Say the phrase and the text is inserted exactly as written, including line breaks (`\n`) and tabs (`\t`).
 - The text goes in verbatim and last: nothing in it is cleaned, capitalized, turned into a list or sent to the AI.
-- Punctuation Whisper glues to the phrase ("my address." or "my address,") is absorbed, so a snippet without a final period stays without one.
+- Punctuation Whisper glues to the phrase is absorbed when it is a comma or semicolon, or a period, question mark or exclamation mark at the very end of what you said ("my address." as the last words), so a snippet without a final period stays without one. A period, question mark or exclamation mark with more speech after it is kept, so "Here is my address. Call me" pastes the address, a period, then "Call me".
 - Say **literal** right before a trigger to type the words themselves ("literal my address").
 - Settings warns about a trigger that is also a spoken command (the snippet wins), a trigger shorter than 3 characters, an empty snippet, a row with text but no trigger, and rows past the limit (those are ignored).
 

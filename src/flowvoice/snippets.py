@@ -10,6 +10,13 @@ def _key(trigger: str) -> str:
     return " ".join(trigger.split()).lower()
 
 
+def _kept_sentence_end(m: re.Match) -> str:
+    """Touching . ! ? after a trigger stay when more text follows; , ; are always absorbed."""
+    if not m.string[m.end():].strip():
+        return ""
+    return "".join(c for c in m.group("after") if c in ".!?")
+
+
 def protect_snippets(text: str, snippets: dict[str, str]) -> tuple[str, dict[str, str]]:
     """Replace each trigger in text with a placeholder; return (text, placeholder -> snippet)."""
     table: dict[str, str] = {}
@@ -24,7 +31,7 @@ def protect_snippets(text: str, snippets: dict[str, str]) -> tuple[str, dict[str
     )
     pattern = re.compile(
         rf"(?:(?<!\S){_TOUCH}+)?(?<!\w)(?:(?P<lit>literal)[ \t]+)?"
-        rf"(?P<trig>{alts})(?!\w){_TOUCH}*",
+        rf"(?P<trig>{alts})(?!\w)(?P<after>{_TOUCH}*)",
         re.IGNORECASE,
     )
     placeholders: dict[str, str] = {}
@@ -38,7 +45,7 @@ def protect_snippets(text: str, snippets: dict[str, str]) -> tuple[str, dict[str
             ph = chr(PLACEHOLDER_BASE + len(placeholders))
             placeholders[key] = ph
             mapping[ph] = table[key]
-        return placeholders[key]
+        return placeholders[key] + _kept_sentence_end(m)
 
     return pattern.sub(replace, text), mapping
 

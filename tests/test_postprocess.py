@@ -55,6 +55,11 @@ def test_snippet_expands_exactly():
     assert Postprocessor().process("my linkedin.", make_cfg()) == LINKEDIN
 
 
+def test_snippet_mid_text_keeps_sentence_end():
+    out = Postprocessor().process("Here is my LinkedIn. Let me know if you have questions.", make_cfg())
+    assert out == f"Here is {LINKEDIN}. Let me know if you have questions."
+
+
 def test_snippet_protected_before_commands():
     cfg = make_cfg(snippets={"first new line": "SNIP"})
     assert Postprocessor().process("first new line", cfg) == "SNIP"

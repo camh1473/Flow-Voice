@@ -49,8 +49,23 @@ def test_longest_trigger_wins():
     ("here is my linkedin, thanks", "here is {0} thanks"),
     ("is it my linkedin?!", "is it {0}"),
     ("see ...my linkedin; ok", "see {0} ok"),
+    ("my linkedin. ", "{0} "),
+    ("is it my linkedin?! \n", "is it {0} \n"),
 ])
 def test_touching_punctuation_absorbed(raw, expected):
+    text, mapping = protect_snippets(raw, SNIPPETS)
+    assert text == expected.format(ph(0))
+    assert mapping == {ph(0): LINK}
+
+
+@pytest.mark.parametrize("raw,expected", [
+    ("Here is my LinkedIn. Let me know if you have questions.", "Here is {0}. Let me know if you have questions."),
+    ("my linkedin? ok", "{0}? ok"),
+    ("my linkedin! ok", "{0}! ok"),
+    ("my linkedin, ok. Thanks", "{0} ok. Thanks"),
+    ("my linkedin;. ok", "{0}. ok"),
+])
+def test_mid_text_sentence_end_is_kept(raw, expected):
     text, mapping = protect_snippets(raw, SNIPPETS)
     assert text == expected.format(ph(0))
     assert mapping == {ph(0): LINK}
@@ -146,10 +161,12 @@ def _run(raw: str, **kwargs) -> str:
     ("this is my github period", f"This is {GITHUB}."),
     ("this is my github question mark", f"This is {GITHUB}?"),
     ("my github my linkedin", f"{GITHUB} {LINK}"),
-    ("my github.my linkedin", f"{GITHUB}{LINK}"),
+    ("my github.my linkedin", f"{GITHUB}.{LINK}"),
     ("first my github new line my linkedin second", f"First {GITHUB}\n{LINK} second"),
     ("um, you know, my signature", SIGNATURE),
-    ("see my linkedin profile. bye", f"See {PROFILE} bye"),
+    ("see my linkedin profile. bye", f"See {PROFILE}. Bye"),
+    ("Here is my LinkedIn. let me know if you have questions.",
+     f"Here is {LINK}. Let me know if you have questions."),
 ])
 def test_placeholder_survives_clean(raw, expected):
     assert _run(raw) == expected

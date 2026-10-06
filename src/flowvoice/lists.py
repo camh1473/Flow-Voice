@@ -1,4 +1,4 @@
-"""Rule-based list formatting: spoken or typed numbered and ordinal lists."""
+"""Rule-based list formatting: numbered, ordinal and cue-based bulleted lists."""
 import re
 from typing import NamedTuple
 
@@ -33,6 +33,26 @@ _MARKUP = re.compile(r"(?m)^[ \t]*- |\n[ \t]*\d+\. ")
 _SENTENCE_START = re.compile(r"(?:^|[.!?:]\s+|\n\s*)$")
 _LAST_ITEM_END = re.compile(r"[.!?](?=\s+\S)|\n")
 _EDGE_WORD = re.compile(r"^(?:and|then)(?!\w)|(?<!\w)(?:and|then)$", re.IGNORECASE)
+
+_OBJECT_CUES = ("the following", "a list of", "list of")
+_NOUN_CUES = (
+    "shopping list", "to-do list", "to do list", "todo list",
+    "things to do", "things i need", "agenda", "ingredients", "items",
+)
+_BULLET_CUE = re.compile(
+    r"(?<![\w-])(?P<cue>" + "|".join(c.replace(" ", r"\s+") for c in _OBJECT_CUES + _NOUN_CUES)
+    + r")(?![\w-])[ \t]*(?P<p>[:,])?[ \t]*",
+    re.IGNORECASE,
+)
+_NOT_AN_ITEM = re.compile(
+    r"(?:is|are|was|were|be|been|will|would|can|could|should|must|may|might|has|have|had|do|does|did"
+    r"|i|you|he|she|it|we|they|me|him|us|them|this|that|these|those|there|which|who|what"
+    r"|to|for|from|with|in|on|at|of|by|about|into|after|before|like"
+    r"|day|days|week|weeks|month|months|year|years|morning|afternoon|evening|night|weekend|time)(?!\w)",
+    re.IGNORECASE,
+)
+_BULLET_SEP = re.compile(r"\s*,(?=\s|$)\s*(?:(?:and|then)\s+)?|\s+(?:and|then)\s+", re.IGNORECASE)
+_MAX_BULLET_WORDS = 6
 
 
 def _value(token: str) -> int:
@@ -96,7 +116,7 @@ def _clean_item(item: str) -> str:
         if stripped == item:
             break
         item = stripped
-    if item.endswith("."):
+    if item.endswith(".") and not _ABBREVIATION.search(item[:-1]):
         item = item[:-1].rstrip()
     if item[:1].isalpha():
         item = item[0].upper() + item[1:]
@@ -114,16 +134,21 @@ def _split(text: str, run: list[Marker]) -> tuple[str, list[str], str]:
     """Return (lead-in, raw items, tail) around the markers of `run`."""
     bounds = [m.start for m in run[1:]] + [len(text)]
     items = [text[m.end:end] for m, end in zip(run, bounds)]
-    tail = ""
+    items[-1], tail = _cut_tail(items[-1])
+    return text[:run[0].start], items, tail
+
+
+def _cut_tail(text: str) -> tuple[str, str]:
+    """Split at the first sentence end (not after a title abbreviation) or newline."""
     end = next(
-        (e for e in _LAST_ITEM_END.finditer(items[-1])
-         if not (e.group() == "." and _ABBREVIATION.search(items[-1][:e.start()]))),
+        (e for e in _LAST_ITEM_END.finditer(text)
+         if not (e.group() == "." and _ABBREVIATION.search(text[:e.start()]))),
         None,
     )
-    if end:
-        cut = end.start() if end.group() == "\n" else end.end()
-        items[-1], tail = items[-1][:cut], items[-1][end.end():].strip()
-    return text[:run[0].start], items, tail
+    if not end:
+        return text, ""
+    cut = end.start() if end.group() == "\n" else end.end()
+    return text[:cut], text[end.end():].strip()
 
 
 def _render(lead: str, lines: list[str], tail: str) -> str:
@@ -143,8 +168,38 @@ def _format_numbered(text: str) -> str | None:
     return _render(_lead_in(lead), lines, tail)
 
 
+def _bullet_items(text: str, cue: re.Match) -> tuple[list[str], str] | None:
+    """Items and tail after `cue`, or None when the cue does not lead a list."""
+    region, tail = _cut_tail(text[cue.end():])
+    items = [_clean_item(item) for item in _BULLET_SEP.split(region)]
+    if len(items) < 3:
+        return None
+    if cue.group("p") != ":":
+        if " ".join(cue.group("cue").lower().split()) not in _OBJECT_CUES:
+            return None
+        if _SENTENCE_START.search(text[:cue.start()]) or ":" in region:
+            return None
+        if any(_NOT_AN_ITEM.match(item) for item in items):
+            return None
+    for item in items:
+        words = [w for w in item.split() if re.search(r"\w", w)]
+        if not words or len(words) > _MAX_BULLET_WORDS:
+            return None
+    return items, tail
+
+
+def _format_bullets(text: str) -> str | None:
+    for cue in _BULLET_CUE.finditer(text):
+        found = _bullet_items(text, cue)
+        if found:
+            items, tail = found
+            lead = text[:cue.start()] + cue.group("cue") + (cue.group("p") or "")
+            return _render(_lead_in(lead), [f"- {item}" for item in items], tail)
+    return None
+
+
 def format_lists(text: str) -> str:
     """Format a spoken list as lines; return text unchanged if none is found or markup exists."""
     if not text or _has_list_markup(text):
         return text
-    return _format_numbered(text) or text
+    return _format_numbered(text) or _format_bullets(text) or text

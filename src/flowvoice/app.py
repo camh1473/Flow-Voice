@@ -93,7 +93,8 @@ class App:
         self.ui.set_state("idle")
 
     def _paste_text(self, text: str) -> None:
-        self.ui.set_state("idle")  # hide the badge so it can never take focus from the paste
+        if not self._recording:  # a newer take keeps its recording pill (non-activating)
+            self.ui.set_state("idle")  # hide the badge so it can never take focus from the paste
         self._paste(text)
 
     def _on_result(self, raw: str, clean_text: str, tag) -> None:
@@ -123,5 +124,4 @@ class App:
         self.speaker.speak(self._copy_selection())
 
     def _on_done(self) -> None:
-        if not self._recording:
-            self.ui.set_state("idle")
+        self.ui.set_state("recording" if self._recording else "idle")

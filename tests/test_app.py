@@ -1,3 +1,5 @@
+import threading
+
 import numpy as np
 
 from flowvoice.app import App
@@ -284,6 +286,45 @@ def test_on_level_forwards_to_ui_and_talk():
     clock.t += 5.0
     app.tick(); app.dictation.join()
     assert app.talk.state == "idle" and pasted == ["Hello"]
+
+
+class GatedEngine:
+    def __init__(self, text="um hello"):
+        self.text = text
+        self.gate = threading.Event()
+        self.entered = threading.Event()
+
+    def transcribe(self, audio):
+        self.entered.set()
+        self.gate.wait(5)
+        return self.text
+
+
+def test_paste_during_new_recording_keeps_recording_state():
+    engine = GatedEngine()
+    app, pasted, ui, _ = make(engine=engine)
+    app.on_ptt_start(); app.on_ptt_stop()  # dictation A queued
+    assert engine.entered.wait(5)
+    app.on_ptt_start()  # recording B starts while A is processing
+    mark = len(ui.states)
+    engine.gate.set(); app.dictation.join()
+    assert pasted == ["Hello"]
+    assert "idle" not in ui.states[mark:]
+    assert ui.states[-1] == "recording"
+
+
+def test_paste_when_not_recording_goes_idle_before_paste():
+    events = []
+    ui = FakeUi()
+    orig = ui.set_state
+    ui.set_state = lambda s: (events.append(("state", s)), orig(s))
+    app = App(Config(), engine=FakeEngine(), recorder=FakeRecorder(AUDIO), speaker=FakeSpeaker(),
+              ui=ui, paste=lambda t: events.append(("paste", t)),
+              copy_selection=lambda: "", active_app=lambda: "")
+    app.on_ptt_start(); app.on_ptt_stop(); app.dictation.join()
+    paste_at = events.index(("paste", "Hello"))
+    assert ("state", "idle") in events[:paste_at]
+    assert ui.states[-1] == "idle"
 
 
 def test_on_level_never_raises_into_audio_thread():

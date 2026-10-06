@@ -630,6 +630,13 @@ def test_moved_placeholder_rejected(original, candidate):
     assert rejection_reason(original, candidate) is not None
 
 
+def test_connector_set_allows_ordinals_but_not_number_words():
+    from flowvoice.ai_polish import _changes_words
+    assert not _changes_words(["do", "first", "this", "and", "that"], ["do", "this", "that"])
+    assert _changes_words(["buy", "one", "milk"], ["buy", "milk"])
+    assert _changes_words(["buy", "ten", "eggs"], ["buy", "eggs"])
+
+
 def test_placeholder_bullet_item_accepted():
     original = (f"For the meeting tomorrow the agenda is budget, {P0}, hiring, and the schedule for the "
                 "new phase of the community")

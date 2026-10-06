@@ -29,6 +29,7 @@ _ORDINAL_MARKER = re.compile(
     r"(?<!\w)(?P<o>" + "|".join(sorted(_ORDINALS, key=len, reverse=True)) + r")(?!\w)(?!\s+of\s+all\b)(?P<p>[,:])",
     re.IGNORECASE,
 )
+_CLAUSE_BOUNDARY = re.compile(r"(?:^|[.!?:;,\n])\Z")
 _MARKUP = re.compile(r"(?m)^[ \t]*- |\n[ \t]*\d+\. ")
 _SENTENCE_START = re.compile(r"(?:^|[.!?:]\s+|\n\s*)$")
 _LAST_ITEM_END = re.compile(r"[.!?](?=\s+\S)|\n")
@@ -106,10 +107,14 @@ def _number_markers(text: str) -> list[Marker]:
 
 
 def _ordinal_markers(text: str) -> list[Marker]:
-    """Ordinals count only when set off by a comma or colon ('First, ...', 'Second: ...')."""
+    """Ordinals count only at a clause boundary and set off by a comma or colon.
+
+    'First, ...' and 'Okay, first, ...' count; 'Safety first, ...' and 'came in first,' do not.
+    """
     return [
         Marker(m.start(), m.end(), _ORDINALS[m.group("o").lower()], "ordinal")
         for m in _ORDINAL_MARKER.finditer(text)
+        if _CLAUSE_BOUNDARY.search(text[:m.start()].rstrip(" \t"))
     ]
 
 

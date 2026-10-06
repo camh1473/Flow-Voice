@@ -89,10 +89,9 @@ _CALENDAR = frozenset(
     "june july august september october november december".split())
 _CALENDAR_ABBREVIATIONS = frozenset(
     "mon tue tues wed thu thur thurs fri sat sun jan feb mar apr jun jul aug sep sept oct nov dec".split())
-_CONNECTORS = frozenset(
-    "and then or also next first second third fourth fifth firstly secondly thirdly "
-    "one two three four five six seven eight nine ten".split())  # may vanish when a list is made
-_SENTENCE_LEAD =" \t\"'([" + chr(0x201C)
+_CONNECTORS = frozenset(  # may vanish when a list is made; number words are facts and must stay
+    "and then or also next first second third fourth fifth firstly secondly thirdly".split())
+_SENTENCE_LEAD = "\t\"'([" + chr(0x201C)
 _MARKDOWN = (re.compile(r"\*\*"), re.compile(r"__"), re.compile("`"), re.compile(r"(?m)^[ \t]*[#>]"))
 _SENTENCE_SPLIT = re.compile(r"[.!?\n]+")
 _THINK = re.compile(r"^\s*<think>.*?</think>", re.IGNORECASE | re.DOTALL)

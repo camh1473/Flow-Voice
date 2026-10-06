@@ -90,6 +90,44 @@ def test_unchanged(text):
     assert format_lists(text) == text
 
 
+MID_CLAUSE_ORDINALS = [
+    "He came in first, she came in second, and I came in third.",
+    "Safety first, quality second, speed third.",
+    "Family first, work second, everything else third.",
+    "We finished first, they finished second, and the Smiths finished third.",
+    "Customers first, profits second, ego third.",
+    "Our team ranked first, theirs ranked second, and the rest ranked third.",
+    "She placed first, I placed second, he placed third.",
+    "Health first, money second.",
+    "Kids first, chores second, screens third.",
+    "The red car came first, the blue one second, and ours third.",
+    "God first, family second, football third.",
+    "People first, process second, tools third, and metrics fourth.",
+    "Buyers come first, builders second, and lenders third.",
+    "He was ranked second, she was ranked first.",
+]
+
+
+@pytest.mark.parametrize("text", MID_CLAUSE_ORDINALS)
+def test_mid_clause_ordinals_unchanged(text):
+    assert format_lists(text) == text
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("First, wake up. Second, make coffee. Third, ship it.", "1. Wake up\n2. Make coffee\n3. Ship it"),
+    ("First: plan. Second: build.", "1. Plan\n2. Build"),
+    ("Steps: first, plug it in, second, turn it on, third, check the lights.",
+     "Steps:\n1. Plug it in\n2. Turn it on\n3. Check the lights"),
+    ("Okay, first, call Sam. Second, send the plans.", "Okay:\n1. Call Sam\n2. Send the plans"),
+    ("Please do this: first, plug it in; second, turn it on.",
+     "Please do this:\n1. Plug it in\n2. Turn it on"),
+    ("Steps\nfirst, plug it in\nsecond, turn it on", "Steps:\n1. Plug it in\n2. Turn it on"),
+])
+def test_clause_boundary_ordinals_format(text, expected):
+    assert format_lists(text) == expected
+    assert format_lists(expected) == expected
+
+
 def test_placeholders_pass_through_items_untouched():
     text = f"Send 1. {ph(0)} to Sam 2. the plans"
     assert format_lists(text) == f"Send:\n1. {ph(0)} to Sam\n2. The plans"
@@ -131,6 +169,7 @@ def test_newline_in_last_item_starts_tail():
     "This is my number one priority. Number two is sales.",
     "I woke up at 1. Then at 2. Then I gave up.",
     "It was one, maybe two, people.",
+    *MID_CLAUSE_ORDINALS,
 ])
 def test_idempotent(text):
     once = format_lists(text)

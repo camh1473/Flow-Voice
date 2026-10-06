@@ -35,7 +35,12 @@ DEFAULT_COMMANDS: dict[str, str] = {
     "dot": ".",
 }
 
-GUARDED = frozenset({"period", "colon", "hyphen", "dash", "slash", "dot"})
+GUARDED = frozenset({"period", "colon", "hyphen", "dash", "em dash", "slash", "dot"})
+GUARD_WORDS = frozenset({"the", "a", "an", "this", "that", "time", "grace", "trial", "probation"})
+TLDS = frozenset({"com", "org", "net", "edu", "gov", "io", "co", "us", "ai", "dev", "app", "uk"})
+_ADDRESS_JOINERS = frozenset({"slash", "hyphen", "dash", "em dash", "underscore", "dot"})
+_CAPS_ON = ("all", "caps")
+_CAPS_OFF = ("end", "caps")
 
 _TOUCH_PUNCT = ".,;!?"
 _OPEN = frozenset({"open quote", "open paren", "open bracket"})
@@ -86,9 +91,25 @@ def _match(bare: list[str], i: int, phrases: dict[tuple[str, ...], str], longest
     return None
 
 
-def _converts(phrase: str) -> bool:
-    """Whether a matched phrase becomes its output here (guard rules hook)."""
-    return phrase not in GUARDED
+def _set_off(token: str) -> bool:
+    return token != token.strip(_TOUCH_PUNCT)
+
+
+def _converts(phrase, tokens, bare, i, n, in_address, next_is_command) -> bool:
+    """Whether a matched phrase becomes its output here (guard rules)."""
+    if phrase not in GUARDED:
+        return True
+    if in_address and phrase in _ADDRESS_JOINERS:
+        return True
+    if i > 0 and bare[i - 1] in GUARD_WORDS:
+        return False
+    if phrase == "dot":
+        return i + n < len(bare) and bare[i + n] in TLDS
+    if phrase == "period":
+        end = i + n >= len(tokens)
+        touching = _set_off(tokens[i]) or (i > 0 and tokens[i - 1][-1] in _TOUCH_PUNCT + ":")
+        return end or touching or next_is_command
+    return True
 
 
 def _join(items: list[tuple[str, str]]) -> str:
@@ -110,34 +131,60 @@ def _join(items: list[tuple[str, str]]) -> str:
 def apply_commands(text: str, mapping: dict[str, str] = DEFAULT_COMMANDS) -> str:
     """Replace spoken command phrases in text with their symbols or breaks."""
     phrases = {tuple(k.lower().split()): k for k in mapping if k.split()}
-    if not phrases:
-        return text
+    phrases.setdefault(_CAPS_ON, "all caps")
+    phrases.setdefault(_CAPS_OFF, "end caps")
     longest = max(len(p) for p in phrases)
     tokens = text.split()
     bare = [_bare(t) for t in tokens]
     items: list[tuple[str, str]] = []
-    changed = False
+    changed = caps = in_address = False
+
+    def add_word(token: str) -> None:
+        nonlocal in_address
+        if items and items[-1][0] == "word":
+            in_address = False
+        items.append(("word", token.upper() if caps else token))
+        if "@" in token:
+            in_address = True
+        elif _set_off(token):
+            in_address = False
+
     i = 0
     while i < len(tokens):
         if bare[i] == "literal" and (m := _match(bare, i + 1, phrases, longest)):
             n = m[1]
-            items.extend(("word", t) for t in tokens[i + 1:i + 1 + n])
+            for t in tokens[i + 1:i + 1 + n]:
+                add_word(t)
             changed = True
             i += 1 + n
             continue
         m = _match(bare, i, phrases, longest)
-        if m and _converts(m[0]):
-            phrase, n = m
-            output = mapping[phrase]
-            role = _role(phrase, output)
-            if role == "attach" and items and items[-1][0] == "word":
-                prev = items.pop()[1].rstrip(_TOUCH_PUNCT)
-                if prev:
-                    items.append(("word", prev))
-            items.append((role, output))
+        if m and tuple(bare[i:i + m[1]]) in (_CAPS_ON, _CAPS_OFF):
+            caps = tuple(bare[i:i + m[1]]) == _CAPS_ON
             changed = True
+            i += m[1]
+            continue
+        if m:
+            phrase, n = m
+            next_is_command = _match(bare, i + n, phrases, longest) is not None
+            if _converts(phrase, tokens, bare, i, n, in_address, next_is_command):
+                output = mapping[phrase]
+                role = _role(phrase, output)
+                if role == "attach" and items and items[-1][0] == "word":
+                    prev = items.pop()[1].rstrip(_TOUCH_PUNCT)
+                    if prev:
+                        items.append(("word", prev))
+                items.append((role, output))
+                in_address = (in_address and role == "join") or output == "@" or (
+                    phrase == "dot" and role == "join"
+                )
+                changed = True
+                i += n
+                continue
+            for t in tokens[i:i + n]:
+                add_word(t)
             i += n
             continue
-        items.append(("word", tokens[i]))
+        add_word(tokens[i])
         i += 1
     return _join(items) if changed else text

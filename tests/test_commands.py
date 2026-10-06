@@ -62,9 +62,64 @@ def test_empty_mapping_returns_text_unchanged():
     assert apply_commands(text, {}) == text
 
 
-def test_guarded_words_left_alone_for_now():
-    assert apply_commands("a dash of salt") == "a dash of salt"
-    assert apply_commands("the time period is long") == "the time period is long"
+@pytest.mark.parametrize(
+    "text",
+    [
+        "the time period is long",
+        "a trial period",
+        "a trial period.",
+        "a dash of salt",
+        "an em dash here",
+        "this colon",
+        "that hyphen",
+        "the slash key",
+        "say quote hello",
+        "see you dot",
+        "the dot com bubble",
+        "in that period we grew",
+    ],
+)
+def test_guarded_words_stay_words(text):
+    assert apply_commands(text) == text
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("I am done period", "I am done."),
+        ("Done, period.", "Done."),
+        ("done period. next", "done. next"),
+        ("done period new line next", "done.\nnext"),
+        ("note colon buy milk", "note: buy milk"),
+        ("well hyphen known", "well-known"),
+        ("wait dash what", "wait\u2014what"),
+        ("wait em dash what", "wait\u2014what"),
+        ("john at sign gmail dot com", "john@gmail.com"),
+        ("john at sign mail dot example dot org", "john@mail.example.org"),
+        ("example dot com slash pricing", "example.com/pricing"),
+        ("my underscore name", "my_name"),
+        ("all caps hello end caps world", "HELLO world"),
+        ("all caps hello world", "HELLO WORLD"),
+        ("say all caps hi comma there end caps ok", "say HI, THERE ok"),
+        ("literal period", "period"),
+        ("literal dot", "dot"),
+        ("literal dash", "dash"),
+        ("literal all caps", "all caps"),
+        ("full stop", "."),
+    ],
+)
+def test_guarded_commands_convert(text, expected):
+    assert apply_commands(text) == expected
+
+
+def test_address_run_ends_at_next_plain_word():
+    assert apply_commands("email john at sign gmail dot com then the dot") == (
+        "email john@gmail.com then the dot"
+    )
+
+
+def test_address_run_overrides_word_guard():
+    assert apply_commands("x at sign the dash a dot com") == "x@the\u2014a.com"
 
 
 def test_default_mapping_not_mutated():

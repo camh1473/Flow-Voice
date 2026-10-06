@@ -113,6 +113,27 @@ def render_history(dark: bool, scale: float = 1.0) -> QImage:
     return image
 
 
+def render_settings(dark: bool, scale: float = 1.0, scroll: float = 0.0,
+                    size: tuple[int, int] = (880, 620)) -> QImage:
+    """The main window on the Settings tab, scrolled to `scroll` (0 = top, 1 = bottom)."""
+    settings = QSettings(str(Path(tempfile.gettempdir()) / "flowvoice-preview.ini"),
+                         QSettings.IniFormat)
+    mics = [("System default", None), ("1: Microphone (USB Audio)", 1), ("4: Headset", 4)]
+    win = MainWindow(Config(ui_scale=scale), None, lambda cfg: None, settings=settings,
+                     mics=mics, dark=dark)
+    win.resize(*size)
+    win.show_page("Settings")
+    win.show()
+    QApplication.processEvents()
+    bar = win.settings_view.scroll.verticalScrollBar()
+    bar.setValue(round(bar.maximum() * scroll))
+    QApplication.processEvents()
+    image = win.grab().toImage()
+    win.request_quit()
+    win.close()
+    return image
+
+
 def main() -> None:
     app = QApplication.instance() or QApplication([])
     OUT.mkdir(parents=True, exist_ok=True)
@@ -130,6 +151,17 @@ def main() -> None:
         print(path)
     path = OUT / "history_light_1p5.png"
     render_history(False, 1.5).save(str(path))
+    print(path)
+    for name, dark in (("light", False), ("dark", True)):
+        for suffix, scroll in (("", 0.0), ("_bottom", 1.0)):
+            path = OUT / f"settings_{name}{suffix}.png"
+            render_settings(dark, scroll=scroll).save(str(path))
+            print(path)
+    path = OUT / "settings_light_1p5.png"
+    render_settings(False, 1.5, size=(1320, 930)).save(str(path))
+    print(path)
+    path = OUT / "settings_light_tall.png"
+    render_settings(False, size=(880, 1700)).save(str(path))
     print(path)
     path = OUT / "home_recording.png"
     render_home(False, "recording").save(str(path))

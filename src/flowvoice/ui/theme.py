@@ -27,6 +27,7 @@ LIGHT = {
     "destructive_hover": "#e6352b",
     "scroll": "rgba(0, 0, 0, 0.22)",
     "select": "#eaf3ff",
+    "switch_off": "#d1d1d6",
 }
 
 DARK = {
@@ -50,6 +51,7 @@ DARK = {
     "destructive_hover": "#ff5f55",
     "scroll": "rgba(255, 255, 255, 0.25)",
     "select": "#1f3552",
+    "switch_off": "#48484a",
 }
 
 FONT_SIZES = {
@@ -215,6 +217,39 @@ QCheckBox::indicator:checked {{
     background: {c["accent"]};
     border: 1px solid {c["accent"]};
 }}
+
+Switch {{
+    qproperty-onColor: {c["accent"]};
+    qproperty-offColor: {c["switch_off"]};
+    qproperty-knobColor: #ffffff;
+    qproperty-ringColor: {c["accent"]};
+}}
+#SectionCaption {{
+    font-size: {f["caption"]}px;
+    font-weight: 600;
+    color: {c["secondary"]};
+    letter-spacing: 0.6px;
+    padding: 0 0 {px(6)} {px(4)};
+}}
+#RowTitle {{ font-size: {f["body"]}px; font-weight: 500; }}
+#SliderValue {{ font-size: {f["small"]}px; color: {c["secondary"]}; }}
+#Separator {{ background: {c["separator"]}; border: none; }}
+#Footer {{ background: {c["bg"]}; border-top: 1px solid {c["separator"]}; }}
+QLineEdit[capturing="true"] {{ border: 1px solid {c["accent"]}; color: {c["accent"]}; }}
+#CommandTable {{ background: {c["card"]}; border: 1px solid {c["control_border"]}; border-radius: 8px; }}
+#CommandTable::item {{ padding: 0 {px(8)}; border-bottom: 1px solid {c["separator"]}; }}
+#CommandTable::item:selected {{ background: {c["select"]}; color: {c["text"]}; }}
+#CommandTable QHeaderView {{
+    background: transparent;
+    border: none;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+}}
+#CommandTable QHeaderView::section {{ background: transparent; padding: {px(6)} {px(8)}; }}
+#CommandTable QTableCornerButton::section {{ background: transparent; border: none; }}
+ChevronCombo {{ qproperty-arrowColor: {c["secondary"]}; }}
+#CommandTable QLineEdit {{ border-radius: 4px; padding: 0 {px(6)}; }}
+QWidget:disabled {{ color: {c["tertiary"]}; }}
 
 QSlider::groove:horizontal {{
     height: 4px;

@@ -18,9 +18,12 @@ from PySide6.QtWidgets import (
 
 from flowvoice.config import Config
 from flowvoice.history import History
+from flowvoice.settings_logic import mic_choices
 from flowvoice.ui import theme
 from flowvoice.ui.history_view import HistoryView
 from flowvoice.ui.home_view import HomeView
+from flowvoice.ui.hotkey_edit import pretty_key
+from flowvoice.ui.settings_view import SettingsView
 
 PAGES = ("Home", "History", "Settings")
 GLYPHS = {"Home": "\ue80f", "History": "\ue81c", "Settings": "\ue713"}
@@ -31,28 +34,11 @@ SIDEBAR_WIDTH = 200
 ICON_PX = 18
 
 
-def pretty_key(key: str) -> str:
-    """'right ctrl' -> 'Right Ctrl', 'ctrl+alt+s' -> 'Ctrl+Alt+S'."""
-    return "+".join(part.strip().title() for part in key.split("+"))
-
-
 def hint_text(config: Config) -> str:
     key = pretty_key(config.ptt_key)
     if config.hands_free:
         return f"Hold {key} to talk, or double-tap it to go hands-free."
     return f"Hold {key} to talk."
-
-
-def placeholder(title: str) -> QWidget:
-    """A page with a centered label; Tasks 13-14 replace these."""
-    page = QWidget()
-    page.setObjectName("Page")
-    layout = QVBoxLayout(page)
-    label = QLabel(f"{title} is coming soon.")
-    label.setObjectName("Placeholder")
-    label.setAlignment(Qt.AlignCenter)
-    layout.addWidget(label)
-    return page
 
 
 def _icon_font() -> str | None:
@@ -78,8 +64,8 @@ def _glyph_pixmap(family: str, glyph: str, color: str, px: int, ratio: float) ->
 class MainWindow(QMainWindow):
     """Closing hides the window; only request_quit() lets it really close.
 
-    Page seam for later tasks: `set_history_view(widget)` and `set_settings_view(widget)`
-    swap the placeholder page in the stack and update the matching attribute.
+    Page seam: `set_history_view(widget)` and `set_settings_view(widget)` swap a page in the
+    stack, update the matching attribute and pass the UI scale to the page's `set_scale`.
     """
 
     quit_requested = Signal()
@@ -134,7 +120,7 @@ class MainWindow(QMainWindow):
         self.home = HomeView()
         self.home.hint(hint_text(config))
         self.history_view: QWidget = HistoryView(history)
-        self.settings_view: QWidget = placeholder("Settings")
+        self.settings_view: QWidget = SettingsView(config, self.mics or mic_choices(), on_save_config)
         for page in (self.home, self.history_view, self.settings_view):
             self.pages.addWidget(page)
         row.addWidget(self.pages, 1)
@@ -156,12 +142,13 @@ class MainWindow(QMainWindow):
         self.sidebar_frame.setFixedWidth(round(SIDEBAR_WIDTH * scale))
         self.sidebar.setIconSize(QSize(round(ICON_PX * scale), round(ICON_PX * scale)))
         self._refresh_icons()
-        self._scale_history()
+        self._scale_pages()
 
-    def _scale_history(self) -> None:
-        setter = getattr(self.history_view, "set_scale", None)
-        if setter is not None:
-            setter(self._scale)
+    def _scale_pages(self) -> None:
+        for page in (self.history_view, self.settings_view):
+            setter = getattr(page, "set_scale", None)
+            if setter is not None:
+                setter(self._scale)
 
     def set_dark(self, dark: bool) -> None:
         self._dark = dark
@@ -173,11 +160,12 @@ class MainWindow(QMainWindow):
     def set_history_view(self, widget: QWidget) -> None:
         self._replace_page(self.history_view, widget)
         self.history_view = widget
-        self._scale_history()
+        self._scale_pages()
 
     def set_settings_view(self, widget: QWidget) -> None:
         self._replace_page(self.settings_view, widget)
         self.settings_view = widget
+        self._scale_pages()
 
     def show_page(self, name: str) -> None:
         self.sidebar.setCurrentRow(PAGES.index(name))

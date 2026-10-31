@@ -1,6 +1,8 @@
 import numpy as np
 from faster_whisper import WhisperModel
 
+from flowvoice.paths import bundled_model
+
 
 def _pick_device() -> tuple[str, str]:
     try:
@@ -21,7 +23,7 @@ class Engine:
             device, compute = _pick_device()
         else:
             compute = "float16" if device == "cuda" else "int8"
-        self._name = model_name
+        self._name = bundled_model(model_name) or model_name  # a shipped copy works offline
         self._factory = model_factory
         self.device = device
         try:

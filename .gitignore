@@ -4,3 +4,5 @@ __pycache__/
 .superpowers/
 .pytest_cache/
 smoke.*
+dist/
+build/

@@ -1,6 +1,8 @@
 import sys
 import winreg
 
+from flowvoice.paths import frozen
+
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 _NAME = "FlowVoice"
 
@@ -19,6 +21,8 @@ class _WinReg:
 
 
 def default_command() -> str:
+    if frozen():
+        return f'"{sys.executable}"'
     pythonw = sys.executable.replace("python.exe", "pythonw.exe")
     return f'"{pythonw}" -m flowvoice'
 

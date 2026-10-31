@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 import threading
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Callable
 
@@ -13,6 +14,7 @@ from flowvoice.autostart import set_autostart
 from flowvoice.config import ensure_config_file, load_config, save_config
 from flowvoice.history import History
 from flowvoice.hotkey import PushToTalk, Toggle
+from flowvoice.paths import relaunch_command
 from flowvoice.recorder import Recorder
 from flowvoice.settings_logic import mic_choices
 from flowvoice.singleinstance import SingleInstance
@@ -128,7 +130,82 @@ class AiProbe:
         return self._ai.test(cfg)
 
 
+def selftest() -> int:
+    """Check an installed/packaged copy without touching the running app.
+
+    Loads the speech model, transcribes the bundled sample and opens the microphone briefly.
+    No keyboard hooks, no window, no single-instance lock: safe next to a running copy.
+    Prints one PASS/FAIL line per check and returns 0 only if all pass.
+    """
+    import wave
+
+    import numpy as np
+
+    from flowvoice.engine import Engine
+    from flowvoice.paths import app_dir, bundled_model, frozen
+
+    results: list[tuple[str, bool, str]] = []
+
+    def check(name: str, fn) -> None:
+        try:
+            results.append((name, True, str(fn())))
+        except Exception as e:
+            results.append((name, False, f"{type(e).__name__}: {e}"))
+
+    def sample_path():
+        bundle = Path(getattr(sys, "_MEIPASS", app_dir()))  # PyInstaller's _internal folder
+        for base in (bundle / "samples", app_dir() / "samples", app_dir() / "tests" / "data"):
+            if (base / "hello.wav").is_file():
+                return base / "hello.wav"
+        raise FileNotFoundError("hello.wav sample not found")
+
+    def speech():
+        cfg = load_config()
+        engine = Engine(cfg.model, device="cpu")
+        with wave.open(str(sample_path()), "rb") as w:
+            audio = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16).astype(np.float32) / 32768
+        text = engine.transcribe(audio)
+        if not text:
+            raise RuntimeError("model returned no text for the sample")
+        where = "bundled" if bundled_model(cfg.model) else "downloaded/cached"
+        return f"{where} model {cfg.model!r} heard: {text!r}"
+
+    def microphone():
+        r = Recorder(device=load_config().mic_device)
+        r.open()
+        try:
+            import time
+            time.sleep(1.0)
+            if not r.healthy():
+                raise RuntimeError("stream opened but delivered no audio")
+            return "stream delivers audio"
+        finally:
+            r.close()
+
+    def libraries():
+        import ctranslate2, keyboard, onnxruntime, pyperclip, sounddevice, win32com.client  # noqa: F401
+        from PySide6 import QtWidgets  # noqa: F401
+        return f"frozen={frozen()} ctranslate2={ctranslate2.__version__}"
+
+    check("libraries", libraries)
+    check("speech", speech)
+    check("microphone", microphone)
+    lines = [f"{'PASS' if ok else 'FAIL'} {name}: {detail}" for name, ok, detail in results]
+    report = "\n".join(lines) + "\n"
+    try:  # a windowed .exe has no console, so the report is also written next to the log
+        out = diagnostics.default_dir() / "selftest.txt"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(report, encoding="utf-8")
+    except Exception:
+        pass
+    if sys.stdout is not None:
+        print(report, end="", flush=True)
+    return 0 if all(ok for _, ok, _ in results) else 1
+
+
 def main() -> int:
+    if "--selftest" in sys.argv[1:]:
+        return selftest()
     restarted = os.environ.pop(RESTART_ENV, "") == "1"
     guard = SingleInstance()
     if not guard.acquire(wait=RESTART_WAIT_SECONDS if restarted else 0.0):
@@ -182,8 +259,8 @@ def _run(guard: SingleInstance, previous_crashed: bool) -> int:
 
     def restart() -> None:
         restart_process(shutdown=shell.shutdown,
-                        spawn=lambda: subprocess.Popen([sys.executable, "-m", "flowvoice"],
-                                                       env={**os.environ, RESTART_ENV: "1"}),
+                        spawn=lambda: subprocess.Popen(relaunch_command(),
+                                                                               env={**os.environ, RESTART_ENV: "1"}),
                         exit=lambda: os._exit(0), notify=shell.ui.notify)
 
     def apply_settings(old, new) -> str:

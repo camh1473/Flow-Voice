@@ -1,3 +1,4 @@
+import logging
 import os
 import subprocess
 import sys
@@ -5,6 +6,7 @@ import threading
 from types import SimpleNamespace
 from typing import Callable
 
+from flowvoice import diagnostics
 from flowvoice.ai_polish import MISSING, OFF, UNAVAILABLE, WARMING, AiService
 from flowvoice.app import App
 from flowvoice.autostart import set_autostart
@@ -13,6 +15,7 @@ from flowvoice.history import History
 from flowvoice.hotkey import PushToTalk, Toggle
 from flowvoice.recorder import Recorder
 from flowvoice.settings_logic import mic_choices
+from flowvoice.singleinstance import SingleInstance
 from flowvoice.tts import Speaker
 from flowvoice.ui.hotkey_edit import pretty_key
 from flowvoice.ui.shell import (
@@ -22,6 +25,23 @@ from flowvoice.ui.shell import (
     restart_process,
     wire_capture,
 )
+
+
+log = logging.getLogger("flowvoice")
+
+RESTART_ENV = "FLOWVOICE_RESTARTED"
+RESTART_WAIT_SECONDS = 15.0  # a restarted copy waits for the old one to let go of the lock
+
+
+def _already_running_notice() -> None:
+    """pythonw has no console: say it in a small message box instead of exiting silently."""
+    try:
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(
+            None, "Flow Voice is already running. Look for its icon in the system tray.",
+            "Flow Voice", 0x40)
+    except Exception:
+        pass
 
 
 def _open_history() -> History | None:
@@ -109,6 +129,25 @@ class AiProbe:
 
 
 def main() -> int:
+    restarted = os.environ.pop(RESTART_ENV, "") == "1"
+    guard = SingleInstance()
+    if not guard.acquire(wait=RESTART_WAIT_SECONDS if restarted else 0.0):
+        _already_running_notice()
+        return 0
+    previous_crashed = diagnostics.setup()
+    try:
+        code = _run(guard, previous_crashed)
+    except BaseException:
+        # Logged, and the marker is left behind so the next start reports an unclean exit.
+        log.critical("fatal error in main", exc_info=True)
+        guard.release()
+        raise
+    diagnostics.mark_clean_exit()
+    guard.release()
+    return code
+
+
+def _run(guard: SingleInstance, previous_crashed: bool) -> int:
     cfg = load_config()
     first_run = ensure_config_file(cfg)
     autostart_error = None
@@ -127,6 +166,10 @@ def main() -> int:
     ai.configure(state.cfg)  # warm up alongside the speech model; a no-op with AI off
 
     def stop_input() -> None:
+        # Runs first on quit and on restart (which exits with os._exit, skipping main's tail):
+        # a deliberate stop is recorded as clean and the lock is freed for a restarted copy.
+        diagnostics.mark_clean_exit()
+        guard.release()
         hooks.close()
         _unhook_all()
         with state.lock:
@@ -139,7 +182,8 @@ def main() -> int:
 
     def restart() -> None:
         restart_process(shutdown=shell.shutdown,
-                        spawn=lambda: subprocess.Popen([sys.executable, "-m", "flowvoice"]),
+                        spawn=lambda: subprocess.Popen([sys.executable, "-m", "flowvoice"],
+                                                       env={**os.environ, RESTART_ENV: "1"}),
                         exit=lambda: os._exit(0), notify=shell.ui.notify)
 
     def apply_settings(old, new) -> str:
@@ -154,6 +198,9 @@ def main() -> int:
         shell.ui.notify("History unavailable")
     if autostart_error is not None:
         shell.ui.notify(f"Start with Windows failed: {autostart_error}")
+    if previous_crashed:
+        shell.ui.notify("Flow Voice did not close cleanly last time. "
+                        f"Details: {diagnostics.log_path()}")
 
     def setup() -> None:
         from flowvoice.engine import Engine  # slow import: keep it off the GUI thread
@@ -178,6 +225,7 @@ def main() -> int:
             hooks.set([PushToTalk(cfg.ptt_key, app.press, app.release, app.other_key),
                        Toggle(cfg.tts_key, read_aloud)])
         except Exception as e:
+            log.exception("startup failed")
             shell.on_toggle = lambda: shell.ui.notify("Startup failed - check Settings")
             shell.ui.notify(f"Startup failed: {e}")
             shell.ui.show_window("Settings")

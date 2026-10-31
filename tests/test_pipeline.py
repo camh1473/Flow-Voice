@@ -160,3 +160,24 @@ def test_on_result_error_reported_and_worker_survives():
     d.submit(np.ones(10, dtype=np.float32)); d.join()
     d.submit(np.ones(10, dtype=np.float32)); d.join()
     assert out == ["hi", "hi"] and len(err) == 2 and "db locked" in err[0]
+
+
+def test_worker_survives_error_reporter_and_on_done_raising():
+    """The single worker thread is the only consumer: a UI error must not kill it."""
+    out = []
+
+    def bad_error(msg):
+        raise RuntimeError("ui gone")
+
+    def bad_done():
+        raise RuntimeError("ui gone")
+
+    def flaky(audio):
+        if audio[0] == 0:
+            raise ValueError("model broke")
+        return "ok"
+
+    d = Dictation(flaky, lambda t: t, out.append, bad_error, on_done=bad_done)
+    d.submit(np.array([0], dtype=np.float32)); d.join()
+    d.submit(np.array([1], dtype=np.float32)); d.join()
+    assert out == ["ok"] and d.pending() == 0

@@ -1,3 +1,4 @@
+import logging
 import threading
 import time
 from contextlib import contextmanager
@@ -15,6 +16,9 @@ from flowvoice.ui_api import Ui
 from flowvoice.vocabulary import is_glossary_echo
 
 AI_RETRY_SECONDS = 60.0
+MIC_CHECK_SECONDS = 5.0
+
+log = logging.getLogger("flowvoice.app")
 
 
 class App:
@@ -42,6 +46,9 @@ class App:
         self._inject_lock = threading.Lock()
         self._injecting = 0  # read lock-free by the hook thread
         self._history_failed = False
+        self._last_mic_check = clock()
+        self._mic_lost = False
+        self._mic_busy = False
         self.dictation = Dictation(self._transcribe, self._clean, self._paste_text,
                                    on_error=ui.notify, on_done=self._on_done,
                                    on_result=self._on_result)
@@ -78,6 +85,55 @@ class App:
 
     def tick(self) -> None:
         self.talk.tick()
+        self._watch_mic()
+
+    def _watch_mic(self) -> None:
+        """Every few seconds check the mic stream off the GUI thread; never raises.
+
+        A stream can die silently (sleep/resume, unplugged USB mic, driver reset) and leave
+        the app recording silence, so a dead or swapped mic is rebuilt automatically.
+        """
+        try:
+            healthy = getattr(self.recorder, "healthy", None)
+            reopen = getattr(self.recorder, "reopen", None)
+            if healthy is None or reopen is None or self._mic_busy:
+                return
+            now = self._clock()
+            if now - self._last_mic_check < MIC_CHECK_SECONDS:
+                return
+            self._last_mic_check = now
+            self._mic_busy = True
+            threading.Thread(target=self._check_mic, args=(healthy, reopen), daemon=True,
+                             name="mic-watch").start()
+        except Exception:
+            self._mic_busy = False
+            log.exception("mic watch failed to start")
+
+    def _check_mic(self, healthy, reopen) -> None:
+        try:
+            if healthy():
+                if self._mic_lost:
+                    self._mic_lost = False
+                    self.ui.notify("Microphone is working again")
+                return
+            if not self._mic_lost:
+                self._mic_lost = True
+                log.warning("mic stopped delivering audio; reconnecting")
+                self.ui.notify("Microphone stopped - reconnecting...")
+            outcome = reopen()
+            if outcome == "same":
+                self._mic_lost = False
+                log.info("mic reconnected")
+                self.ui.notify("Microphone reconnected")
+            elif outcome == "default":
+                self._mic_lost = False
+                log.warning("chosen mic not found; using the system default")
+                self.ui.notify("Your microphone was not found - using the system default")
+            # 'failed': stay flagged and retry at the next check without repeating the toast
+        except Exception:
+            log.exception("mic check failed")
+        finally:
+            self._mic_busy = False
 
     def on_level(self, level: float) -> None:
         """Called from the audio thread: must never raise."""

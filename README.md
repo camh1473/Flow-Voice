@@ -117,6 +117,20 @@ Changes to the hotkeys, speech model, microphone and start-with-Windows restart 
 ## Read aloud
 Select text in any app and press **Ctrl+Alt+S**. Press it again to stop.
 
+## Troubleshooting
+
+Flow Voice runs without a console window, so it keeps its own record in `%APPDATA%\FlowVoice\`:
+
+| File | What it holds |
+| --- | --- |
+| `flowvoice.log` | Start and stop times, unhandled errors with tracebacks, Qt warnings, microphone events. Rolls over at 512 KB, three backups. Your dictated text is never written to it. |
+| `native-crash.log` | A stack dump if the process dies inside native code (Qt, PortAudio, the speech engine). Normally empty. |
+| `running.marker` | Exists only while the app runs. If it is still there at the next start, the last run ended unexpectedly and a tray message says so. |
+
+- **Only one copy runs.** Starting a second one (for example `run.bat` while the start-with-Windows copy is already running) shows "already running" and exits. Two copies would both hook the keyboard and paste every dictation twice.
+- **The microphone recovers by itself.** If the mic stream stops delivering audio (sleep and wake, an unplugged USB mic, a driver reset) or its device number starts to mean a different device, Flow Voice rebuilds the stream within about 8 seconds, following your chosen mic by name. If that mic is gone it switches to the system default and tells you.
+- **To see what happened after a crash,** open `flowvoice.log` and look at the last lines before the `start pid=` entry of the next run.
+
 ## Known limits
 - Apps running as Administrator ignore pasted input from a normal-privilege process.
 - The clipboard is restored after each paste, but only for text (images on the clipboard are lost).

@@ -1,8 +1,11 @@
+import logging
 import queue
 import threading
 from typing import Callable
 
 import numpy as np
+
+log = logging.getLogger("flowvoice.pipeline")
 
 
 class Dictation:
@@ -59,8 +62,15 @@ class Dictation:
                     self._paste(text)
                     self._notify_result(raw, text, tag)
             except Exception as e:
-                self._on_error(f"Dictation failed: {e}")
+                log.exception("dictation failed")
+                try:
+                    self._on_error(f"Dictation failed: {e}")
+                except Exception:
+                    log.exception("could not report the dictation failure")
             finally:
                 with self._lock:
                     self._pending -= 1
-                self._on_done()
+                try:
+                    self._on_done()
+                except Exception:  # the worker is the only consumer: it must outlive any UI error
+                    log.exception("on_done failed")

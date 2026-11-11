@@ -13,6 +13,7 @@ _REPEAT = re.compile(r"\b(\w+)(?:[ \t]+\1\b)+", re.IGNORECASE)
 _SENTENCE_START = re.compile(r"(^|[.!?][ \t]+|\n)([a-z])(?=(\S*))")
 _ADDRESS_LIKE = re.compile(r"[@/]|\w\.(?:com|org|net|edu|gov|io|co|us|ai|dev|app|uk)\b")
 _PUNCT = ".!?,;"
+_CLAUSE_BREAKS = ".!?,;:\n" + chr(0x2014) + chr(0x2013)
 
 
 def _alternation(phrases) -> str:
@@ -20,7 +21,11 @@ def _alternation(phrases) -> str:
 
 
 def _apply_backtracks(text: str, phrases) -> str:
-    """Delete the sentence before each backtrack phrase, plus the phrase itself.
+    """Delete the phrase before each backtrack phrase, plus the phrase itself.
+
+    "The phrase" is everything back to the nearest clause break: . ! ? , ; : a dash or a
+    line break. So "I went to the store, and bought milk, scratch that, bought eggs" only
+    loses "and bought milk", not the whole sentence.
 
     A phrase only counts when set off from the surrounding words: preceded by the
     start of the text or punctuation, or followed by punctuation or the end. That
@@ -39,8 +44,8 @@ def _apply_backtracks(text: str, phrases) -> str:
                 break
         else:
             return text
-        core = before_s.rstrip(_PUNCT + " ")
-        cut = max(core.rfind(c) for c in ".!?")
+        core = before_s.rstrip(_PUNCT + ": ")
+        cut = max(core.rfind(c) for c in _CLAUSE_BREAKS)
         kept = core[:cut + 1] if cut >= 0 else ""
         rest = after.lstrip(_PUNCT + " ")
         text = (kept + " " + rest).strip()

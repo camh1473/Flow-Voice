@@ -131,3 +131,22 @@ def test_before_commands_none_keeps_behavior():
 def test_leading_break_after_dropped_filler_is_consistent():
     assert clean("Um, new line, uh, test.", commands=DEFAULT_COMMANDS) == "\nTest."
     assert clean("new line, test.", commands=DEFAULT_COMMANDS) == "\nTest."
+
+
+PHRASE_ONLY = [
+    ("I went to the store, and bought milk, scratch that, bought eggs.",
+     "I went to the store, bought eggs."),
+    ("We should meet on Monday, no wait, excuse me, on Tuesday afternoon.",
+     "We should meet on Monday, on Tuesday afternoon."),
+    ("Thanks for the update. I will send it today, at noon, scratch that, at two.",
+     "Thanks for the update. I will send it today, at two."),
+    ("First point; second point, never mind, third point.", "First point; third point."),
+    ("Call him: tomorrow morning, forget that, tomorrow night.", "Call him: tomorrow night."),
+    ("Hello there. Scratch that. Hi", "Hi"),
+    ("No punctuation at all scratch that", ""),
+]
+
+
+@pytest.mark.parametrize("raw,expected", PHRASE_ONLY)
+def test_backtrack_erases_only_the_last_phrase_not_the_whole_sentence(raw, expected):
+    assert clean(raw) == expected

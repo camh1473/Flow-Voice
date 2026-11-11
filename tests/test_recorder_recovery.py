@@ -205,3 +205,26 @@ def test_find_by_name_prefers_same_host_api():
     assert rec_mod._find_by_name("Mic", 1, q) == 1
     assert rec_mod._find_by_name("Mic", 5, q) == 0
     assert rec_mod._find_by_name("Nope", 0, q) is None
+
+
+def test_start_racing_the_audio_thread_never_breaks_the_callback():
+    """Pressing the key (start) empties the pre-roll while the audio thread trims it."""
+    import threading
+
+    r, _, _ = make(MICS)
+    stop = threading.Event()
+
+    def audio():
+        while not stop.is_set():
+            r._on_audio(np.full((160, 1), 0.1, dtype=np.float32), 160, None, None)
+
+    t = threading.Thread(target=audio)
+    t.start()
+    try:
+        for _ in range(20000):
+            r.start()
+            r.stop()
+    finally:
+        stop.set()
+        t.join()
+    assert r._callback_failures == 0

@@ -55,6 +55,7 @@ class Recorder:
         self._clock = clock
         self._stream = None
         self._stream_lock = threading.Lock()
+        self._buf_lock = threading.Lock()  # start() empties the pre-roll while the audio thread trims it
         self._ring: deque[np.ndarray] = deque()
         self._ring_len = 0
         self._take: list[np.ndarray] = []
@@ -139,11 +140,12 @@ class Recorder:
             return "failed"
 
     def start(self) -> None:
-        self._take = list(self._ring)
-        self._ring.clear()
-        self._ring_len = 0
-        self._recorded = 0
-        self._recording = True
+        with self._buf_lock:
+            self._take = list(self._ring)
+            self._ring.clear()
+            self._ring_len = 0
+            self._recorded = 0
+            self._recording = True
 
     def stop(self) -> np.ndarray | None:
         if not self._recording:
@@ -174,10 +176,15 @@ class Recorder:
                 self._recorded += len(mono)
                 self._report_level(mono)
                 return
-            self._ring.append(mono)
-            self._ring_len += len(mono)
-            while self._ring_len - len(self._ring[0]) >= self._preroll:
-                self._ring_len -= len(self._ring.popleft())
+            with self._buf_lock:
+                if self._recording:  # start() won the race while we were converting the chunk
+                    self._take.append(mono)
+                    self._recorded += len(mono)
+                    return
+                self._ring.append(mono)
+                self._ring_len += len(mono)
+                while len(self._ring) > 1 and self._ring_len - len(self._ring[0]) >= self._preroll:
+                    self._ring_len -= len(self._ring.popleft())
         except Exception:
             self._callback_failures += 1
             if self._callback_failures == 1:

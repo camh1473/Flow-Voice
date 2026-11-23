@@ -82,10 +82,11 @@ def _entry(text="Hello there, world.", id=7):
     return HistoryEntry(id, "2026-10-05T09:30:00", "hello there world", text, "notepad.exe")
 
 
-def _body_color(pill):
-    rect = pill.capsule_rect()
-    x = int(rect.left() + rect.height() * 0.3)
-    return pill.grab().toImage().pixelColor(x, int(rect.center().y()))
+def _blue_pixels(pill):
+    img = pill.grab().toImage()
+    return sum(1 for y in range(img.height()) for x in range(img.width())
+               if img.pixelColor(x, y).alpha() > 25
+               and img.pixelColor(x, y).blue() > img.pixelColor(x, y).red() + 60)
 
 
 def test_shell_constructs(make_shell):
@@ -100,8 +101,8 @@ def test_ui_state_from_worker_thread_turns_pill_blue(make_shell):
     t.start()
     t.join()
     QCoreApplication.processEvents()
-    c = _body_color(s.pill)
-    assert c.blue() > 200 and c.red() < 80
+    s.pill.settle()
+    assert _blue_pixels(s.pill) > 100
     assert s.window.home.state() == "recording"
 
 

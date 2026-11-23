@@ -41,6 +41,7 @@ def speech_levels(count: int = 60) -> list[float]:
 def grab(state: str, scale: float) -> QImage:
     pill = PillWidget(scale=scale)
     pill.set_state(state)
+    pill.settle()
     if state == "recording":
         for level in speech_levels():
             pill.set_level(level)

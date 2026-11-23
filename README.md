@@ -12,10 +12,10 @@ Double-click `run.bat`. The first launch downloads the ~500 MB `small.en` speech
 - A single quick tap of Right Ctrl does nothing.
 
 ## The pill
-A small capsule at the bottom center, always on top, that never takes focus from the app you are typing in.
-- **Grey:** idle.
-- **Red with a moving waveform:** recording.
-- **Amber with animated dots:** transcribing.
+A small round mic icon at the bottom center, always on top, that never takes focus from the app you are typing in.
+- **Round mic icon:** idle.
+- **Fine blue threads that swell with your voice:** recording. They fade in when you start and let go slowly when you pause or stop.
+- **Amber threads with a glow sweeping along them:** transcribing.
 
 Click it to start or stop a hands-free take. You can hide it while idle in Settings (it still appears while recording).
 

@@ -42,6 +42,9 @@ AMBER_DEEP = QColor("#f28c00")  # a touch deeper than the tray amber so it reads
 GWL_EXSTYLE = -20
 WS_EX_TOOLWINDOW = 0x00000080
 WS_EX_NOACTIVATE = 0x08000000
+HWND_TOPMOST = -1
+SWP_NOMOVE, SWP_NOSIZE, SWP_NOACTIVATE = 0x0002, 0x0001, 0x0010
+KEEP_ON_TOP_MS = 2000
 
 
 def _lerp(a: float, b: float, t: float) -> float:
@@ -139,6 +142,11 @@ class PillWidget(QWidget):
         self._timer = QTimer(self)
         self._timer.setInterval(FRAME_MS)
         self._timer.timeout.connect(self._tick)
+        # Windows only honours "always on top" for a window moved into the top layer, and other
+        # apps can push it back down, so it is re-asserted now and then while it is showing.
+        self._top_timer = QTimer(self)
+        self._top_timer.setInterval(KEEP_ON_TOP_MS)
+        self._top_timer.timeout.connect(self.raise_to_top)
         self._relayout()
 
     # ----- public API
@@ -209,6 +217,8 @@ class PillWidget(QWidget):
         elif self.isVisible():
             self.hide()
         self._sync_timer()
+        if self.isVisible():
+            self.raise_to_top()
         self.update()
 
     def _reposition(self) -> None:
@@ -260,11 +270,28 @@ class PillWidget(QWidget):
         if not self._styled:
             self._styled = True
             self._apply_noactivate()
+        self.raise_to_top()
+        self._top_timer.start()
         self._sync_timer()
 
     def hideEvent(self, event) -> None:
         super().hideEvent(event)
+        self._top_timer.stop()
         self._sync_timer()
+
+    def raise_to_top(self) -> None:
+        """Put the pill above every normal window without activating it. Never raises."""
+        if sys.platform != "win32" or QGuiApplication.platformName() != "windows":
+            return
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            ctypes.windll.user32.SetWindowPos(
+                wintypes.HWND(int(self.winId())), wintypes.HWND(HWND_TOPMOST), 0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE)
+        except Exception:
+            pass
 
     def _apply_noactivate(self) -> None:
         if sys.platform != "win32" or QGuiApplication.platformName() != "windows":

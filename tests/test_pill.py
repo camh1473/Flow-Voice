@@ -219,3 +219,24 @@ def test_animation_timer_runs_only_while_needed(qapp, clock):
 def test_unknown_state_is_rejected(qapp):
     with pytest.raises(ValueError):
         make(qapp).set_state("sleeping")
+
+
+def test_pill_is_raised_to_the_top_layer_when_shown_and_kept_there(qapp, monkeypatch):
+    calls = []
+    monkeypatch.setattr(PillWidget, "raise_to_top", lambda self: calls.append(1))
+    pill = make(qapp, "idle", always_visible=False)
+    assert calls == []  # hidden: nothing to raise
+    pill.set_state("recording")
+    shown = len(calls)
+    assert shown >= 1 and pill._top_timer.isActive()
+    pill._top_timer.timeout.emit()
+    assert len(calls) == shown + 1  # the keep-on-top timer re-asserts it
+    pill.set_state("idle")
+    pill.settle()
+    assert not pill.isVisible() and not pill._top_timer.isActive()
+
+
+def test_raise_to_top_never_raises_on_a_bad_window(qapp, monkeypatch):
+    pill = make(qapp, "idle")
+    monkeypatch.setattr(pill, "winId", lambda: (_ for _ in ()).throw(RuntimeError("no handle")))
+    pill.raise_to_top()

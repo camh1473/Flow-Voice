@@ -1,14 +1,11 @@
 ; Inno Setup script for Flow Voice. Built by packaging\build.ps1 (needs dist\FlowVoice from PyInstaller).
-;   ISCC.exe /DAppVersion=0.1.0 /DWithModel=1            -> FlowVoice-0.1.0-Setup.exe        (speech model inside, works offline)
-;   ISCC.exe /DAppVersion=0.1.0 /DWithModel=0 /DSuffix=-Lite -> FlowVoice-0.1.0-Setup-Lite.exe (small; downloads the model once)
+;   ISCC.exe /DAppVersion=0.1.0                    -> FlowVoice-0.1.0-Setup.exe      (speech model inside, works offline)
+;   ISCC.exe /DAppVersion=0.1.0 /DLite /DSuffix=-Lite -> FlowVoice-0.1.0-Setup-Lite.exe (small; downloads the model once)
 ; Installs for the current user only: no administrator rights, nothing outside your profile.
 ; Settings and history live in %APPDATA%\FlowVoice and are never touched by install or uninstall.
 
 #ifndef AppVersion
   #define AppVersion "0.1.0"
-#endif
-#ifndef WithModel
-  #define WithModel 1
 #endif
 #ifndef Suffix
   #define Suffix ""
@@ -44,7 +41,7 @@ CloseApplications=no
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; Flags: unchecked
 
 [Files]
-#if WithModel
+#ifndef Lite
 Source: "..\dist\FlowVoice\*"; DestDir: "{app}"; Excludes: "Install-FlowVoice.*"; Flags: recursesubdirs createallsubdirs ignoreversion
 #else
 Source: "..\dist\FlowVoice\*"; DestDir: "{app}"; Excludes: "models\*,Install-FlowVoice.*"; Flags: recursesubdirs createallsubdirs ignoreversion

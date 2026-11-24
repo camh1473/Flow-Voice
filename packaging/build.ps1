@@ -68,9 +68,9 @@ if ($NoInstaller) { Write-Host "skipped (-NoInstaller)" }
 elseif (-not $iscc) { Write-Warning "Inno Setup not found; install it with: winget install JRSoftware.InnoSetup --scope user" }
 else {
     if (-not (Test-Path "$dist\FlowVoice\models")) { throw "The full installer needs the speech model; build without -NoModel." }
-    & $iscc "/DAppVersion=$ver" "/DWithModel=1" "$repo\packaging\FlowVoice.iss"
+    & $iscc "/DAppVersion=$ver" "$repo\packaging\FlowVoice.iss"
     if ($LASTEXITCODE) { throw "Inno Setup failed (full)" }
-    & $iscc "/DAppVersion=$ver" "/DWithModel=0" "/DSuffix=-Lite" "$repo\packaging\FlowVoice.iss"
+    & $iscc "/DAppVersion=$ver" "/DLite" "/DSuffix=-Lite" "$repo\packaging\FlowVoice.iss"
     if ($LASTEXITCODE) { throw "Inno Setup failed (lite)" }
     $sums = Get-ChildItem "$dist\FlowVoice-$ver-Setup*.exe" | ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name }
     Set-Content -Path "$dist\SHA256SUMS.txt" -Value $sums -Encoding ascii

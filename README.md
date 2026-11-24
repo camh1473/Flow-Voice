@@ -2,7 +2,21 @@
 
 Free, local, Wispr Flow-style dictation for Windows. Speak, and clean text is pasted at your cursor in any app. All speech runs on your PC (Whisper); nothing is sent to the cloud, and audio is never saved.
 
-## Run
+## Download and install (Windows 10/11, 64-bit)
+Get the newest installer from the [Releases page](https://github.com/camh1473/Flow-Voice/releases/latest):
+
+| File | Size | Use it when |
+| --- | --- | --- |
+| `FlowVoice-<version>-Setup.exe` | ~500 MB | You want it to work immediately and offline (the speech model is inside). |
+| `FlowVoice-<version>-Setup-Lite.exe` | ~95 MB | You have internet. The first launch downloads the speech model once (about 460 MB; a few minutes). |
+
+Double-click the file. It installs for your user only (no administrator rights), adds a Start Menu entry, and can add a desktop shortcut. Your settings and history live in `%APPDATA%\FlowVoice` and survive updates and uninstalling.
+
+- **Windows may warn "Windows protected your PC".** The installers are not code-signed (a certificate costs money), so Windows SmartScreen does not know them yet. Choose **More info > Run anyway**. To check your download is intact, compare its SHA-256 with `SHA256SUMS.txt` on the release page (`Get-FileHash <file>` in PowerShell).
+- **Updates:** about once a day Flow Voice asks GitHub whether a newer release exists and, if so, adds **Download update** to the tray menu. It only opens the release page; nothing installs by itself. It sends nothing about you. Turn it off in Settings > Interface > Check for updates. To update, run the new installer over the old one.
+- **Uninstall:** Windows Settings > Apps, or run the uninstaller in the install folder.
+
+## Run from source
 Double-click `run.bat`. The first launch downloads the ~500 MB `small.en` speech model, so the first start takes a while. On the very first run (no config file yet) the main window opens by itself. After that Flow Voice lives in the system tray and a small pill at the bottom center of the screen.
 
 ## Dictate
@@ -106,7 +120,7 @@ Privacy: Flow Voice only talks to an address on this PC (localhost, 127.0.0.1 or
 ## Settings
 - **Dictation:** push-to-talk key, read-aloud key (click the field, then press the new keys; left and right Ctrl/Shift/Alt are told apart, so pressing Right Ctrl shows "Right Ctrl"), speech model (`tiny.en`, `base.en`, `small.en`, `medium.en`; larger is more accurate but slower), microphone, save history.
 - **Hands-free:** double-tap on/off and the stop-after-silence time.
-- **Interface:** always show the pill, interface size (scales the window and the pill), start with Windows.
+- **Interface:** always show the pill, interface size (scales the window and the pill), start with Windows, check for updates.
 - **Words:** the dictionary and corrections (see Dictionary).
 - **Snippets:** trigger phrases and their text (see Snippets).
 - **Lists and AI:** automatic lists on/off, AI polish on/off, AI model (with Refresh), minimum words, the status line and the Test AI button (see Local AI polish).
@@ -149,3 +163,6 @@ Flow Voice runs without a console window, so it keeps its own record in `%APPDAT
 .venv\Scripts\python scripts/render_previews.py # render UI previews
 ```
 Manual checks that need a person at the keyboard are in `docs/manual-test-checklist.md`.
+
+## Build the installers
+`packaging\build.ps1` builds the app (`dist\FlowVoice\FlowVoice.exe`), a zip, and both installers plus `SHA256SUMS.txt` in `dist\`. It needs [Inno Setup](https://jrsoftware.org/isinfo.php) (`winget install JRSoftware.InnoSetup --scope user`) and the speech model in the Hugging Face cache. To release: change `src\flowvoice\_version.py`, build, then `python scripts\publish_release.py --tag vX.Y.Z --title "Flow Voice X.Y.Z" --notes packaging\release-notes\X.Y.Z.md dist\FlowVoice-X.Y.Z-Setup.exe dist\FlowVoice-X.Y.Z-Setup-Lite.exe dist\SHA256SUMS.txt`. The icon is drawn by `scripts\make_icon.py`.

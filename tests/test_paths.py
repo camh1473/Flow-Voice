@@ -52,3 +52,11 @@ def test_engine_prefers_a_bundled_model(tmp_path, monkeypatch):
     eng.Engine("tiny.en", device="cpu", model_factory=factory)
     eng.Engine("base.en", device="cpu", model_factory=factory)
     assert seen == [str(folder), "base.en"]
+
+
+def test_asset_path_source_and_frozen(monkeypatch, tmp_path):
+    monkeypatch.delattr(sys, "frozen", raising=False)
+    assert paths.asset_path("flowvoice.ico").is_file()
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "_MEIPASS", str(tmp_path), raising=False)
+    assert paths.asset_path("flowvoice.ico") == tmp_path / "flowvoice" / "assets" / "flowvoice.ico"

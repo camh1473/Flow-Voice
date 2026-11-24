@@ -22,6 +22,9 @@ dev = ["pytest"]
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+flowvoice = ["assets/*"]
+
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 markers = ["slow: loads a Whisper model"]

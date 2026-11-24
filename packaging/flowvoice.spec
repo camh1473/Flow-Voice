@@ -5,6 +5,7 @@ from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs
 datas = collect_data_files("faster_whisper")            # silero VAD model used by vad_filter
 datas += collect_data_files("_sounddevice_data")        # PortAudio DLL
 datas += [("../tests/data/hello.wav", "samples")]       # for --selftest
+datas += [("../src/flowvoice/assets", "flowvoice/assets")]  # the logo (.ico and .png)
 binaries = collect_dynamic_libs("ctranslate2") + collect_dynamic_libs("onnxruntime")
 
 # The app only uses QtCore / QtGui / QtWidgets: leave the rest of PySide6 out (hundreds of MB).
@@ -32,5 +33,6 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name="FlowVoice",
-          console=False, disable_windowed_traceback=False, upx=False)
+          console=False, disable_windowed_traceback=False, upx=False,
+          icon="../src/flowvoice/assets/flowvoice.ico")
 coll = COLLECT(exe, a.binaries, a.datas, name="FlowVoice", upx=False)

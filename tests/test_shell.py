@@ -619,3 +619,8 @@ def test_failed_save_restores_ai_enabled_flag():
     old = state.cfg
     on_save(Config(ai_enabled=True))
     assert state.cfg is old and state.ai_enabled is False
+
+
+def test_window_icon_is_the_logo(make_shell, qapp):
+    make_shell()
+    assert not qapp.windowIcon().isNull()

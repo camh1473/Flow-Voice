@@ -46,6 +46,15 @@ def _already_running_notice() -> None:
         pass
 
 
+def _set_app_id() -> None:
+    """Give Windows our own identity so the taskbar shows the Flow Voice icon, not Python's."""
+    try:
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("FlowVoice.App")
+    except Exception:
+        pass
+
+
 def _open_history() -> History | None:
     try:
         return History()
@@ -211,6 +220,7 @@ def main() -> int:
     if not guard.acquire(wait=RESTART_WAIT_SECONDS if restarted else 0.0):
         _already_running_notice()
         return 0
+    _set_app_id()
     previous_crashed = diagnostics.setup()
     try:
         code = _run(guard, previous_crashed)

@@ -4,11 +4,12 @@ import threading
 from typing import Callable
 
 from PySide6.QtCore import QObject, QRectF, QSettings, Qt, QTimer, Slot
-from PySide6.QtGui import QAction, QColor, QIcon, QPainter, QPixmap
+from PySide6.QtGui import QAction, QColor, QIcon, QPainter
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from flowvoice.config import Config
 from flowvoice.history import History, HistoryEntry
+from flowvoice.paths import asset_path
 from flowvoice.settings_logic import needs_restart
 from flowvoice.ui.bridge import QtUi
 from flowvoice.ui.main_window import MainWindow, hint_text
@@ -23,27 +24,28 @@ def _quit_qt() -> None:
     QApplication.quit()
 
 
+def app_icon() -> QIcon:
+    """The Flow Voice logo (every size is in the .ico, so Windows picks the sharpest one)."""
+    return QIcon(str(asset_path("flowvoice.ico")))
+
+
 def tray_icon(state: str = "idle") -> QIcon:
-    """A round badge in the pill's state colour with a white microphone, drawn with QPainter."""
-    pix = QPixmap(ICON_PX, ICON_PX)
-    pix.fill(Qt.transparent)
+    """The logo; while recording or transcribing it gets a small badge in the pill's state colour."""
+    base = app_icon()
+    if state == "idle" or state not in COLORS:
+        return base
+    pix = base.pixmap(ICON_PX, ICON_PX)
+    if pix.isNull():
+        return base
     p = QPainter(pix)
     p.setRenderHint(QPainter.Antialiasing)
+    radius = ICON_PX * 0.21
+    center = QRectF(ICON_PX - 2 * radius - 2, ICON_PX - 2 * radius - 2, 2 * radius, 2 * radius)
+    p.setBrush(QColor("#ffffff"))
     p.setPen(Qt.NoPen)
-    p.setBrush(QColor(COLORS.get(state, COLORS["idle"])))
-    p.drawEllipse(QRectF(2, 2, ICON_PX - 4, ICON_PX - 4))
-    white = QColor("#ffffff")
-    p.setBrush(white)
-    p.drawRoundedRect(QRectF(24, 12, 16, 26), 8, 8)
-    pen = p.pen()
-    pen.setColor(white)
-    pen.setWidthF(4.0)
-    pen.setCapStyle(Qt.RoundCap)
-    p.setPen(pen)
-    p.setBrush(Qt.NoBrush)
-    p.drawArc(QRectF(17, 18, 30, 26), 180 * 16, 180 * 16)
-    p.drawLine(32, 44, 32, 52)
-    p.drawLine(24, 52, 40, 52)
+    p.drawEllipse(center.adjusted(-2, -2, 2, 2))
+    p.setBrush(QColor(COLORS[state]))
+    p.drawEllipse(center)
     p.end()
     return QIcon(pix)
 
@@ -63,6 +65,7 @@ class Shell(QObject):
                  dark: bool | None = None, first_run: bool = False, ai_probe=None) -> None:
         self.qapp = QApplication.instance() or QApplication(sys.argv[:1])
         QApplication.setStyle("Fusion")
+        self.qapp.setWindowIcon(app_icon())
         self.qapp.setQuitOnLastWindowClosed(False)
         super().__init__()
         self.config = config

@@ -15,6 +15,13 @@ def app_dir() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
+def asset_path(name: str) -> Path:
+    """A file from flowvoice/assets: inside the PyInstaller bundle when packaged, else the source tree."""
+    if frozen():
+        return Path(getattr(sys, "_MEIPASS", app_dir())) / "flowvoice" / "assets" / name
+    return Path(__file__).resolve().parent / "assets" / name
+
+
 def relaunch_command() -> list[str]:
     """Command line that starts a fresh copy of this app."""
     return [sys.executable] if frozen() else [sys.executable, "-m", "flowvoice"]

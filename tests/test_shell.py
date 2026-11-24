@@ -199,8 +199,8 @@ def test_restart_process_exits_even_when_shutdown_fails():
 
 def test_tray_menu_has_open_start_stop_quit(make_shell):
     s = make_shell()
-    texts = [a.text() for a in s.tray.contextMenu().actions() if not a.isSeparator()]
-    assert texts == ["Open", "Start dictation", "Quit"]
+    texts = [a.text() for a in s.tray.contextMenu().actions() if not a.isSeparator() and a.isVisible()]
+    assert texts == ["Open", "Start dictation", "Quit"]  # the update item stays hidden until there is one
     s.ui.set_state("recording")
     QCoreApplication.processEvents()
     assert s.start_stop_action.text() == "Stop dictation"
@@ -624,3 +624,38 @@ def test_failed_save_restores_ai_enabled_flag():
 def test_window_icon_is_the_logo(make_shell, qapp):
     make_shell()
     assert not qapp.windowIcon().isNull()
+
+
+def test_update_offer_adds_a_menu_item_and_opens_only_the_project_page(make_shell, monkeypatch):
+    from PySide6.QtGui import QDesktopServices
+    opened = []
+    monkeypatch.setattr(QDesktopServices, "openUrl", lambda url: opened.append(url.toString()) or True)
+    s = make_shell()
+    page = "https://github.com/camh1473/Flow-Voice/releases/tag/v9.9.9"
+    assert not s.update_action.isVisible()
+    s.ui.update_available.emit("9.9.9", "https://evil.example/x")
+    QCoreApplication.processEvents()
+    assert not s.update_action.isVisible()  # a foreign URL is ignored
+    s.ui.update_available.emit("9.9.9", page)
+    QCoreApplication.processEvents()
+    assert s.update_action.isVisible() and "9.9.9" in s.update_action.text()
+    s.update_action.trigger()
+    assert opened == [page]
+
+
+def test_clicking_an_unrelated_tray_message_does_not_open_the_update_page(make_shell, monkeypatch):
+    from PySide6.QtGui import QDesktopServices
+    opened = []
+    monkeypatch.setattr(QDesktopServices, "openUrl", lambda url: opened.append(url.toString()) or True)
+    s = make_shell()
+    s.offer_update("9.9.9", "https://github.com/camh1473/Flow-Voice/releases/tag/v9.9.9")
+    s._on_message_clicked()
+    assert len(opened) == 1
+    s.notify("Settings saved")
+    s._on_message_clicked()
+    assert len(opened) == 1
+
+
+def test_tray_tooltip_shows_the_version(make_shell):
+    from flowvoice._version import __version__
+    assert __version__ in make_shell().tray.toolTip()

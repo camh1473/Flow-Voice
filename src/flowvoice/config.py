@@ -34,6 +34,7 @@ class Config:
     ai_min_words: int = 20
     ai_timeout_seconds: float = 6.0
     ai_url: str = "http://localhost:11434"
+    check_updates: bool = True
 
 
 UI_SCALE_MIN, UI_SCALE_MAX = 0.8, 1.6
@@ -53,7 +54,8 @@ def _valid(name: str, v) -> bool:
     if name == "mic_device":
         return v is None or (isinstance(v, int) and not isinstance(v, bool))
     if name in ("start_with_windows", "voice_commands", "hands_free",
-                "save_history", "pill_always_visible", "auto_lists", "auto_questions", "ai_enabled"):
+                "save_history", "pill_always_visible", "auto_lists", "auto_questions", "ai_enabled",
+                "check_updates"):
         return isinstance(v, bool)
     if name in ("filler_phrases", "backtrack_phrases", "dictionary_terms"):
         return isinstance(v, list) and all(isinstance(x, str) for x in v)

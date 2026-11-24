@@ -14,6 +14,18 @@ def _pick_device() -> tuple[str, str]:
     return "cpu", "int8"
 
 
+def model_is_available(name: str) -> bool:
+    """True when `name` can load without downloading: shipped with the app, or already cached."""
+    if bundled_model(name):
+        return True
+    try:
+        from faster_whisper.utils import download_model
+        download_model(name, local_files_only=True)
+        return True
+    except Exception:
+        return False
+
+
 class Engine:
     """Local Whisper. Uses CUDA when it works, otherwise falls back to CPU automatically."""
 

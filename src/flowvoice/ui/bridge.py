@@ -14,6 +14,7 @@ class QtUi(QObject):
     entry_added = Signal(object)
     window_requested = Signal(str)
     ai_status_changed = Signal(str, str)
+    update_available = Signal(str, str)  # version, release page URL
 
     def set_state(self, state: State) -> None:
         self.state_changed.emit(state)

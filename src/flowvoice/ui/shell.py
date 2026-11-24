@@ -3,14 +3,16 @@ import sys
 import threading
 from typing import Callable
 
-from PySide6.QtCore import QObject, QRectF, QSettings, Qt, QTimer, Slot
-from PySide6.QtGui import QAction, QColor, QIcon, QPainter
+from PySide6.QtCore import QObject, QRectF, QSettings, Qt, QTimer, QUrl, Slot
+from PySide6.QtGui import QAction, QColor, QDesktopServices, QIcon, QPainter
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
+from flowvoice._version import __version__
 from flowvoice.config import Config
 from flowvoice.history import History, HistoryEntry
 from flowvoice.paths import asset_path
 from flowvoice.settings_logic import needs_restart
+from flowvoice.updates import safe_url
 from flowvoice.ui.bridge import QtUi
 from flowvoice.ui.main_window import MainWindow, hint_text
 from flowvoice.ui.pill import COLORS, PillWidget
@@ -84,12 +86,17 @@ class Shell(QObject):
         self.open_action = QAction("Open", self._menu)
         self.start_stop_action = QAction("Start dictation", self._menu)
         self.quit_action = QAction("Quit", self._menu)
+        self.update_action = QAction("Download update", self._menu)
+        self.update_action.setVisible(False)
+        self._update_url = ""
+        self._update_message_shown = False  # a click on a tray message only opens the page for THE update message
         self._menu.addAction(self.open_action)
         self._menu.addAction(self.start_stop_action)
+        self._menu.addAction(self.update_action)
         self._menu.addSeparator()
         self._menu.addAction(self.quit_action)
         self.tray = QSystemTrayIcon(tray_icon("idle"))
-        self.tray.setToolTip(TITLE)
+        self.tray.setToolTip(f"{TITLE} {__version__}")
         self.tray.setContextMenu(self._menu)
 
         self.ui.state_changed.connect(self._on_state)
@@ -98,6 +105,9 @@ class Shell(QObject):
         self.ui.entry_added.connect(self._on_entry)
         self.ui.window_requested.connect(self.show_page)
         self.ui.ai_status_changed.connect(self.window.set_ai_status, Qt.QueuedConnection)
+        self.ui.update_available.connect(self.offer_update)
+        self.update_action.triggered.connect(self.open_update_page)
+        self.tray.messageClicked.connect(self._on_message_clicked)
         self.pill.clicked.connect(self._toggle)
         self.window.home.toggle_clicked.connect(self._toggle)
         self.start_stop_action.triggered.connect(self._toggle)
@@ -127,8 +137,30 @@ class Shell(QObject):
 
     @Slot(str)
     def notify(self, message: str) -> None:
+        self._update_message_shown = False
         if self.tray.isVisible():
             self.tray.showMessage(TITLE, message, QSystemTrayIcon.Information, 3000)
+
+    @Slot(str, str)
+    def offer_update(self, version: str, url: str) -> None:
+        """A newer release exists: add a tray menu item and say so once. Ignores any non-project URL."""
+        if not safe_url(url):
+            return
+        self._update_url = url
+        self.update_action.setText(f"Download update ({version})")
+        self.update_action.setVisible(True)
+        self.notify(f"Flow Voice {version} is available. Click here to open the download page.")
+        self._update_message_shown = True
+
+    @Slot()
+    def _on_message_clicked(self) -> None:
+        if self._update_message_shown:
+            self.open_update_page()
+
+    @Slot()
+    def open_update_page(self) -> None:
+        if self._update_url and safe_url(self._update_url):
+            QDesktopServices.openUrl(QUrl(self._update_url))
 
     def open_window(self) -> None:
         self.window.showNormal()

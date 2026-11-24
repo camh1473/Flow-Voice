@@ -114,3 +114,19 @@ def test_initial_prompt_passed_again_on_cpu_fallback(monkeypatch):
     assert e.device == "cpu"
     assert [c[0] for c in _RecordingModel.calls] == ["cuda", "cpu"]
     assert all(c[1]["initial_prompt"] == "Perry Homes" for c in _RecordingModel.calls)
+
+
+def test_model_is_available_for_a_bundled_or_cached_model_only(monkeypatch, tmp_path):
+    import faster_whisper.utils as fw_utils
+    from flowvoice import engine as eng
+
+    monkeypatch.setattr(eng, "bundled_model", lambda name: str(tmp_path) if name == "tiny.en" else None)
+    assert eng.model_is_available("tiny.en")
+    monkeypatch.setattr(fw_utils, "download_model", lambda name, local_files_only=False: "/cache/x")
+    assert eng.model_is_available("small.en")
+
+    def not_cached(name, local_files_only=False):
+        raise RuntimeError("not cached")
+
+    monkeypatch.setattr(fw_utils, "download_model", not_cached)
+    assert not eng.model_is_available("small.en")

@@ -182,3 +182,13 @@ def test_v3_collections_not_shared_between_instances():
     a.dictionary_fixes["z"] = "y"
     a.snippets["z"] = "y"
     assert b.dictionary_terms == [] and b.dictionary_fixes == {} and b.snippets == {}
+
+
+def test_check_updates_defaults_on_and_ignores_a_bad_value(tmp_path):
+    from flowvoice.config import Config, load_config
+    assert Config().check_updates is True
+    p = tmp_path / "c.json"
+    p.write_text('{"check_updates": "yes"}')
+    assert load_config(p).check_updates is True
+    p.write_text('{"check_updates": false}')
+    assert load_config(p).check_updates is False

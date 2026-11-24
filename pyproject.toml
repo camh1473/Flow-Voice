@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "flowvoice"
-version = "0.1.0"
+dynamic = ["version"]
 requires-python = ">=3.11"
 dependencies = [
   "faster-whisper",
@@ -21,6 +21,9 @@ dev = ["pytest"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.dynamic]
+version = {attr = "flowvoice._version.__version__"}
 
 [tool.setuptools.package-data]
 flowvoice = ["assets/*"]

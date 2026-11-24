@@ -387,6 +387,7 @@ class SettingsView(QWidget):
         card = self._section(page, "Interface")
         self.pill_switch = self._switch()
         self.autostart_switch = self._switch()
+        self.updates_switch = self._switch()
         self.scale_slider, scale_box = self._slider(
             round(UI_SCALE_MIN * SCALE_STEPS), round(UI_SCALE_MAX * SCALE_STEPS),
             lambda v: f"{round(v * 100 / SCALE_STEPS)}%")
@@ -396,6 +397,9 @@ class SettingsView(QWidget):
                   scale_box)
         self._row(card, "Start with Windows", "Launch Flow Voice when you sign in.",
                   self.autostart_switch)
+        self._row(card, "Check for updates", "Once a day, ask GitHub if a newer version exists. "
+                  "Nothing about you is sent, and nothing is installed without you.",
+                  self.updates_switch)
 
     def _build_phrases(self, page: QVBoxLayout) -> None:
         card = self._section(page, "Phrases")
@@ -553,6 +557,7 @@ class SettingsView(QWidget):
         self.history_switch.setChecked(config.save_history)
         self.hands_free_switch.setChecked(config.hands_free)
         self.pill_switch.setChecked(config.pill_always_visible)
+        self.updates_switch.setChecked(config.check_updates)
         self.commands_switch.setChecked(config.voice_commands)
         self.silence_slider.setValue(round(config.silence_stop_seconds * SILENCE_STEPS))
         self.scale_slider.setValue(round(config.ui_scale * SCALE_STEPS))
@@ -597,6 +602,7 @@ class SettingsView(QWidget):
             ai_min_words=self.ai_min_words.value(),
             ai_timeout_seconds=self._base.ai_timeout_seconds,
             ai_url=self._base.ai_url,
+            check_updates=self.updates_switch.isChecked(),
         )
 
     def command_rows(self) -> list[tuple[str, str]]:

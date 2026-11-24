@@ -7,7 +7,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Callable
 
-from flowvoice import diagnostics
+from flowvoice import diagnostics, updates
+from flowvoice._version import __version__
 from flowvoice.ai_polish import MISSING, OFF, UNAVAILABLE, WARMING, AiService
 from flowvoice.app import App
 from flowvoice.autostart import set_autostart
@@ -196,6 +197,7 @@ def selftest() -> int:
         from PySide6 import QtWidgets  # noqa: F401
         return f"frozen={frozen()} ctranslate2={ctranslate2.__version__}"
 
+    check("version", lambda: __version__)
     check("libraries", libraries)
     check("speech", speech)
     check("microphone", microphone)
@@ -290,9 +292,13 @@ def _run(guard: SingleInstance, previous_crashed: bool) -> int:
                         f"Details: {diagnostics.log_path()}")
 
     def setup() -> None:
-        from flowvoice.engine import Engine  # slow import: keep it off the GUI thread
+        from flowvoice.engine import Engine, model_is_available  # slow import: keep it off the GUI thread
 
-        shell.ui.notify("Loading speech model...")
+        if model_is_available(cfg.model):
+            shell.ui.notify("Loading speech model...")
+        else:
+            shell.ui.notify(f"Downloading the {cfg.model} speech model (about 500 MB). "
+                            "This happens once and can take a few minutes.")
         try:
             engine = Engine(cfg.model)
             recorder = Recorder(device=cfg.mic_device)
@@ -325,7 +331,18 @@ def _run(guard: SingleInstance, previous_crashed: bool) -> int:
         else:
             shell.ui.notify(f"Ready - hold {key} to dictate")
 
+    def look_for_update() -> None:
+        import time
+        time.sleep(20)  # let startup finish first
+        if not state.cfg.check_updates:
+            return
+        found = updates.check(__version__, diagnostics.default_dir() / "update-check.json")
+        if found is not None:
+            log.info("update available: %s", found.version)
+            shell.ui.update_available.emit(found.version, found.url)
+
     threading.Thread(target=setup, daemon=True).start()
+    threading.Thread(target=look_for_update, daemon=True, name="update-check").start()
     return shell.run()
 
 
